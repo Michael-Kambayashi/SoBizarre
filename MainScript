@@ -1586,29 +1586,34 @@ if game.PlaceId == 74747090658891 then
         local notifRemote = game:GetService("ReplicatedStorage").requests.general:FindFirstChild("notification")
         
         if raidShopRemote and notifRemote then
+            local shopConnection
+            local notifConnection
             local isBroke = false 
 
-            notifRemote.OnClientEvent:Connect(function(msg, time)
-                if msg and string.find(msg, "You're too broke") then
+            notifConnection = notifRemote.OnClientEvent:Connect(function(msg, time)
+                if msg and string.find(msg, "broke", 1, true) then
                     isBroke = true
                 end
             end)
 
-            raidShopRemote.OnClientEvent:Connect(function(data)
+            shopConnection = raidShopRemote.OnClientEvent:Connect(function(data)
                 if hasAttemptedPurchase or not isScriptActive() then return end
 
                 if data and type(data) == "table" and data.Type == "UpdateRaidShop" and data.RaidShop then
+                    -- HARDCODED: ONLY LOOK AT KIRA
                     local targetBoss = "Yoshikage Kira Bites the Dust"
                     local shopData = data.RaidShop[targetBoss]
                     
                     if shopData then
-                        hasAttemptedPurchase = true -- Lock purchases for this raid
+                        hasAttemptedPurchase = true -- Lock purchases
                         isBroke = false 
 
                         local arrowData = shopData["Lucky Arrow"]
                         if arrowData and arrowData.Stock > 0 then
+                            print("[Auto-Buy] Kira Shop: Buying Lucky Arrow...")
                             raidShopRemote:FireServer("Lucky Arrow", targetBoss)
-                            task.wait(1.2) 
+                            
+                            task.wait(1.5) 
                             
                             if not isBroke then
                                 pcall(function() StarterGui:SetCore("SendNotification", {Title = "✅ Bought", Text = "Lucky Arrow acquired.", Duration = 3}) end)
@@ -1620,7 +1625,7 @@ if game.PlaceId == 74747090658891 then
                                     pcall(function() StarterGui:SetCore("SendNotification", {Title = "✅ Bought", Text = "Legendary Chest acquired.", Duration = 3}) end)
                                 end
                             else
-                                pcall(function() StarterGui:SetCore("SendNotification", {Title = "❌ Failed", Text = "Insufficient funds for Arrow.", Duration = 3}) end)
+                                pcall(function() StarterGui:SetCore("SendNotification", {Title = "❌ Failed", Text = "Insufficient funds.", Duration = 3}) end)
                             end
                         else
                             pcall(function() StarterGui:SetCore("SendNotification", {Title = "📦 Out of Stock", Text = "Lucky Arrow sold out.", Duration = 3}) end)
