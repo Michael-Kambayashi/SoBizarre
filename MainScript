@@ -7,7 +7,6 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
-local StarterGui = game:GetService("StarterGui")
 
 -- ==========================================
 -- STATE VARIABLES (DEFAULTS)
@@ -1580,63 +1579,7 @@ if game.PlaceId == 74747090658891 then
         local hasSentWebhook = false 
         
         -- ==========================================
-        -- 1. AUTO-BUY SHOP LISTENER
-        -- ==========================================
-        local raidShopRemote = game:GetService("ReplicatedStorage").requests.character:FindFirstChild("raid_shop")
-        local notifRemote = game:GetService("ReplicatedStorage").requests.general:FindFirstChild("notification")
-        
-        if raidShopRemote and notifRemote then
-            local shopConnection
-            local notifConnection
-            local isBroke = false 
-
-            notifConnection = notifRemote.OnClientEvent:Connect(function(msg, time)
-                if msg and string.find(msg, "broke", 1, true) then
-                    isBroke = true
-                end
-            end)
-
-            shopConnection = raidShopRemote.OnClientEvent:Connect(function(data)
-                if hasAttemptedPurchase or not isScriptActive() then return end
-
-                if data and type(data) == "table" and data.Type == "UpdateRaidShop" and data.RaidShop then
-                    -- HARDCODED: ONLY LOOK AT KIRA
-                    local targetBoss = "Yoshikage Kira Bites the Dust"
-                    local shopData = data.RaidShop[targetBoss]
-                    
-                    if shopData then
-                        hasAttemptedPurchase = true -- Lock purchases
-                        isBroke = false 
-
-                        local arrowData = shopData["Lucky Arrow"]
-                        if arrowData and arrowData.Stock > 0 then
-                            print("[Auto-Buy] Kira Shop: Buying Lucky Arrow...")
-                            raidShopRemote:FireServer("Lucky Arrow", targetBoss)
-                            
-                            task.wait(1.5) 
-                            
-                            if not isBroke then
-                                pcall(function() StarterGui:SetCore("SendNotification", {Title = "✅ Bought", Text = "Lucky Arrow acquired.", Duration = 3}) end)
-                                
-                                local chestData = shopData["Legendary Chest"]
-                                if chestData and chestData.Stock > 0 then
-                                    task.wait(0.5)
-                                    raidShopRemote:FireServer("Legendary Chest", targetBoss)
-                                    pcall(function() StarterGui:SetCore("SendNotification", {Title = "✅ Bought", Text = "Legendary Chest acquired.", Duration = 3}) end)
-                                end
-                            else
-                                pcall(function() StarterGui:SetCore("SendNotification", {Title = "❌ Failed", Text = "Insufficient funds.", Duration = 3}) end)
-                            end
-                        else
-                            pcall(function() StarterGui:SetCore("SendNotification", {Title = "📦 Out of Stock", Text = "Lucky Arrow sold out.", Duration = 3}) end)
-                        end
-                    end
-                end
-            end)
-        end
-
-        -- ==========================================
-        -- 2. INITIAL SPAWN EXECUTION
+        -- 1. INITIAL SPAWN EXECUTION
         -- ==========================================
         task.wait(1.5)
         pcall(function()
@@ -1652,7 +1595,7 @@ if game.PlaceId == 74747090658891 then
         }
 
         -- ==========================================
-        -- 3. BACKGROUND BOSS MONITOR
+        -- 2. BACKGROUND BOSS MONITOR
         -- ==========================================
         while task.wait(1) do
             if not isScriptActive() then break end
