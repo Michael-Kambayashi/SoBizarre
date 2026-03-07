@@ -62,6 +62,7 @@ local TRAIT_CATEGORIES = {
 -- [[ SKIN BLACKLIST TABLE ]] --
 local SKIN_BLACKLIST = {
     "Poison (Purple Haze)",
+	"Greyscale (Purple Haze)",
     "Orange (Magician's Red)",
 	"Greyscale (Magician's Red)",
     "Greyscale (Crazy Diamond)",
