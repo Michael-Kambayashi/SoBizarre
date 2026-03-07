@@ -7,6 +7,7 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
+local StarterGui = game:GetService("StarterGui")
 
 -- ==========================================
 -- STATE VARIABLES (DEFAULTS)
@@ -1564,7 +1565,6 @@ end
 -- ==========================================
 if game.PlaceId == 74747090658891 then
     
-    -- NEW: DESTROY MAIN MENU GUI ON LOAD
     pcall(function()
         local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui", 10)
         if playerGui then
@@ -1580,53 +1580,75 @@ if game.PlaceId == 74747090658891 then
         -- 1. AUTO-BUY SHOP LISTENER
         -- ==========================================
         local raidShopRemote = game:GetService("ReplicatedStorage").requests.character:FindFirstChild("raid_shop")
+        local notifRemote = game:GetService("ReplicatedStorage").requests.general:FindFirstChild("notification")
         
-        if raidShopRemote then
-            local shopConnection
-            shopConnection = raidShopRemote.OnClientEvent:Connect(function(data)
-                
-                if data and type(data) == "table" and data.Type == "UpdateRaidShop" and data.RaidShop then
-                    
-                    -- Loop through all bosses (Jotaro, DIO, etc.)
-                    for bossName, bossShopData in pairs(data.RaidShop) do
-                        if type(bossShopData) == "table" then
-                            
-                            -- DIRECT ITEM ACCESS (No loop, specific order)
-                            local arrowData = bossShopData["Lucky Arrow"]
-                            local chestData = bossShopData["Legendary Chest"]
-                            
-                            -- 1. CHECK LUCKY ARROW PRIORITY
-                            if arrowData and arrowData.Stock and arrowData.Stock > 0 then
-                                
-                                -- Buy Lucky Arrow FIRST
-                                pcall(function() 
-                                    raidShopRemote:FireServer("Lucky Arrow", bossName) 
-                                end)
-                                print("[Auto-Buy] Found Stock! Buying Lucky Arrow...")
-                                
-                                task.wait(0.5) -- Wait to ensure money is deducted for Arrow first
-                                
-                                -- 2. BUY CHEST (Only if Arrow was in stock)
-                                if chestData and chestData.Stock and chestData.Stock > 0 then
-                                    pcall(function() 
-                                        raidShopRemote:FireServer("Legendary Chest", bossName) 
-                                    end)
-                                    print("[Auto-Buy] Buying Legendary Chest (Secondary)")
-                                end
-                                
-                            else
-                                -- 3. ARROW OUT OF STOCK -> SKIP CHEST TO SAVE MONEY
-                                print("[Auto-Buy] Lucky Arrow Out of Stock. Skipping Chest to save money.")
-                            end
-                            
-                        end
-                    end
-                    
-                    -- Disconnect to prevent spam
-                    if shopConnection then shopConnection:Disconnect() end
-                end
-            end)
-        end
+        if raidShopRemote and notifRemote then
+		    local shopConnection
+		    local notifConnection
+		    local isBroke = false 
+		
+		    notifConnection = notifRemote.OnClientEvent:Connect(function(msg, time)
+		        if msg and string.find(msg, "You're too broke") then
+		            isBroke = true
+		        end
+		    end)
+		
+		    shopConnection = raidShopRemote.OnClientEvent:Connect(function(data)
+		        if not isScriptActive() then 
+		            if shopConnection then shopConnection:Disconnect() end
+		            if notifConnection then notifConnection:Disconnect() end
+		            return 
+		        end
+		
+		        if data and type(data) == "table" and data.Type == "UpdateRaidShop" and data.RaidShop then
+		            for bossName, bossShopData in pairs(data.RaidShop) do
+		                if type(bossShopData) == "table" then
+		                    local arrowData = bossShopData["Lucky Arrow"]
+		                    local chestData = bossShopData["Legendary Chest"]
+		                    isBroke = false 
+		
+		                    if arrowData and arrowData.Stock and arrowData.Stock > 0 then
+		                        pcall(function() raidShopRemote:FireServer("Lucky Arrow", bossName) end)
+		                        
+		                        task.wait(1.2) -- Wait for server response
+		                        
+		                        if isBroke then
+		                            pcall(function()
+		                                StarterGui:SetCore("SendNotification", {
+		                                    Title = "💰 Purchase Failed",
+		                                    Text = "Insufficient funds for Lucky Arrow. Skipping Chest.",
+		                                    Duration = 5
+		                                })
+		                            end)
+		                        else
+		                            pcall(function()
+		                                StarterGui:SetCore("SendNotification", {
+		                                    Title = "✅ Purchase Successful",
+		                                    Text = "Lucky Arrow bought! Checking for Chest...",
+		                                    Duration = 5
+		                                })
+		                            end)
+		                            
+		                            if chestData and chestData.Stock and chestData.Stock > 0 then
+		                                pcall(function() raidShopRemote:FireServer("Legendary Chest", bossName) end)
+		                            end
+		                        end
+		                    else
+		                        pcall(function()
+		                            StarterGui:SetCore("SendNotification", {
+		                                Title = "📦 Out of Stock",
+		                                Text = "Lucky Arrow out of stock. Saving money.",
+		                                Duration = 5
+		                            })
+		                        end)
+		                    end
+		                end
+		            end
+		            if shopConnection then shopConnection:Disconnect() end
+		            if notifConnection then notifConnection:Disconnect() end
+		        end
+		    end)
+		end
 
         -- ==========================================
         -- 2. INITIAL SPAWN EXECUTION
