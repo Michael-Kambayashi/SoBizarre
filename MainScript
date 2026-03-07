@@ -1601,7 +1601,7 @@ if game.PlaceId == 74747090658891 then
 		
 		        -- 1. Setup Listener specifically for the "You're too broke" message
 		        brokeListener = notifRemote.OnClientEvent:Connect(function(msg)
-		            -- We match the string "You're too broke" (ignoring the emoji to be safe)
+		            -- We match the string "You're too broke"
 		            if tostring(msg):find("You're too broke") then
 		                isBroke = true
 		            end
@@ -1611,7 +1611,7 @@ if game.PlaceId == 74747090658891 then
 		        SendNotif("🛒 Auto-Buy", "Attempting to buy Lucky Arrow...")
 		        raidShopRemote:FireServer("Lucky Arrow", "Yoshikage Kira Bites the Dust")
 		
-		        -- 3. WAIT for the server to reply (CRITICAL STEP)
+		        -- 3. Wait for server
 		        -- We wait 1.5 seconds. If we are broke, the server sends the notification 
 		        -- during this time, and our listener sets isBroke = true.
 		        task.wait(1.5)
