@@ -19,7 +19,7 @@ local isAutoKilling = false
 local targetConjuration = 100
 
 -- ==========================================
--- WEBHOOK & SETTINGS (PROXY APPLIED)
+-- WEBHOOK & SETTINGS
 -- ==========================================
 local WEBHOOK_URL = "https://webhook.lewisakura.moe/api/webhooks/1477555850141896858/I8QhFKm0NWLQKRN6EQN80aTq7gjacZh5-Q1mkBAu7kd2Wy7M83JAewKETe0ivOR86eSB"
 local ROLL_ANIMATION_TIME = 6 
