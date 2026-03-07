@@ -1636,10 +1636,10 @@ if game.PlaceId == 74747090658891 then
 
         -- List of all final bosses you want to trigger the restart
         local RAID_BOSSES = {
-            ".Yoshikage Kira Bites",
-            ".Jotaro Kujo",
-            ".Muhammad Avdol",
-            ".DIO"
+            "Yoshikage Kira Bites",
+            "Jotaro Kujo",
+            "Muhammad Avdol",
+            "DIO"
         }
 
         -- ==========================================
@@ -1653,7 +1653,7 @@ if game.PlaceId == 74747090658891 then
                 -- Search the live folder
                 for _, mob in ipairs(liveFolder:GetChildren()) do
                     for _, bossName in ipairs(RAID_BOSSES) do
-                        if string.find(mob.Name, bossName, 1, true) then
+                        if string.find(mob.Name, bossName) then
                             bossMob = mob
                             break
                         end
