@@ -76,6 +76,7 @@ local SKIN_BLACKLIST = {
 	"Greyscale (Weather Report)",
 	"Purple (Red Hot Chili Pepper)",
 	"Greyscale (Stone Free)",
+	"Greyscale (Killer Queen)",
 	"DEFAULT"
 }
 
