@@ -1573,8 +1573,8 @@ if game.PlaceId == 74747090658891 then
     end)
 
     task.spawn(function()
-	
-		local hasSentWebhook = false 
+    
+        local hasSentWebhook = false 
         
         -- ==========================================
         -- 1. AUTO-BUY SHOP LISTENER
@@ -1652,10 +1652,13 @@ if game.PlaceId == 74747090658891 then
                 
                 -- Search the live folder
                 for _, mob in ipairs(liveFolder:GetChildren()) do
-                    for _, bossName in ipairs(RAID_BOSSES) do
-                        if string.find(mob.Name, bossName) then
-                            bossMob = mob
-                            break
+                    -- [[ FIX APPLIED: Check for Humanoid to ensure it's an NPC ]] --
+                    if mob:FindFirstChild("Humanoid") then
+                        for _, bossName in ipairs(RAID_BOSSES) do
+                            if string.find(mob.Name, bossName) then
+                                bossMob = mob
+                                break
+                            end
                         end
                     end
                     if bossMob then break end
@@ -1671,8 +1674,12 @@ if game.PlaceId == 74747090658891 then
                     
                     task.wait(2) -- Buffer for death animations
                     
-                    -- Send Webhook before restarting (Ensure your sendRaidWebhook function is above this in your main script)
-                    if sendRaidWebhook then sendRaidWebhook() end
+                    -- Send Webhook before restarting
+                    -- Added the debounce check here since you defined the variable at the top
+                    if not hasSentWebhook then
+                        if sendRaidWebhook then sendRaidWebhook() end
+                        hasSentWebhook = true 
+                    end
                     
                     task.wait(0.5)
                     
