@@ -1652,7 +1652,9 @@ if game.PlaceId == 74747090658891 then
                 
                 -- Search the live folder
                 for _, mob in ipairs(liveFolder:GetChildren()) do
-                    -- [[ FIX APPLIED: Check for Humanoid to ensure it's an NPC ]] --
+				if string.sub(mob.Name, 1, 1) == "." and mob.Name ~= player.Name and mob:FindFirstChild("Humanoid") then
+				local cleanName = mob.Name:sub(2)
+
                     if mob:FindFirstChild("Humanoid") then
                         for _, bossName in ipairs(RAID_BOSSES) do
                             if string.find(mob.Name, bossName) then
