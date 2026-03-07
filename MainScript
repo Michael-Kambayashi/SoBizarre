@@ -1,5 +1,3 @@
---- START OF FILE Paste March 06, 2026 - 10:26PM ---
-
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 local Players = game:GetService("Players")
