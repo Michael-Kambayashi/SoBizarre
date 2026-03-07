@@ -1,0 +1,1795 @@
+--- START OF FILE Paste March 06, 2026 - 10:26PM ---
+
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
+local player = Players.LocalPlayer
+
+-- ==========================================
+-- STATE VARIABLES (DEFAULTS)
+-- ==========================================
+local isAutoFarming = false
+local isAutoUsing = false
+local isConjurationFarming = false
+local isAutoQuesting = false
+local isAutoKilling = false
+local targetConjuration = 100
+
+-- ==========================================
+-- WEBHOOK & SETTINGS (PROXY APPLIED)
+-- ==========================================
+local WEBHOOK_URL = "https://webhook.lewisakura.moe/api/webhooks/1477555850141896858/I8QhFKm0NWLQKRN6EQN80aTq7gjacZh5-Q1mkBAu7kd2Wy7M83JAewKETe0ivOR86eSB"
+local ROLL_ANIMATION_TIME = 6 
+
+-- COMBAT VARIABLES
+local globalUndergroundOffset = 10
+local useSafetyRetreat = false
+local autoDodgeEnabled = false
+local spamM1 = true
+local spamM2 = false
+local spamE = false
+local spamR = false
+local autoSummonStand = false -- NEW TOGGLE STATE
+local globalPauseAttacks = false
+
+local akTargetMobs = {}
+local akMode = "Include"
+local akStopBelow50 = false
+
+-- ==========================================
+-- HARDCODED STAND RARITIES, TRAITS & EXCLUSIONS
+-- ==========================================
+local STAND_RARITIES = {
+    ["RHCP"] = "Common", ["Red Hot Chili Pepper"] = "Common", ["Magician's Red"] = "Uncommon", ["Gold Experience"] = "Uncommon",
+    ["Crazy Diamond"] = "Uncommon", ["Purple Haze"] = "Uncommon", ["The Hand"] = "Uncommon", ["Anubis"] = "Rare",
+    ["Killer Queen"] = "Rare", ["Stone Free"] = "Rare", ["Weather Report"] = "Rare", ["King Crimson"] = "Legendary",
+    ["Star Platinum"] = "Legendary", ["The World"] = "Legendary", ["The World, High Voltage"] = "Legendary",
+    ["White Snake"] = "Mythical", ["C-Moon"] = "Unknown", ["Cream"] = "Unknown", ["D4C"] = "Unknown",
+    ["Made in Heaven"] = "Unknown", ["Silver Chariot"] = "Unknown", ["Wonder of U"] = "Unknown",
+}
+
+local TRAIT_CATEGORIES = {
+    ["Mythical"] = {"Elegant", "Feral", "Transcendent"},
+    ["Legendary"] = {"Methodical", "Dominant", "Cursed", "Rhythmic", "Artistic", "Suffocating"},
+    ["Rare"] = {"Determined", "Compassionate", "Furious", "Slugger", "Fearful", "Durable"},
+    ["Uncommon"] = {"Curious", "Astute", "Predictive", "Kind"},
+    ["Common"] = {"Erratic", "Energetic", "Cowardly", "Happy", "Firm", "Arrogant"}
+}
+
+-- [[ SKIN BLACKLIST TABLE ]] --
+local SKIN_BLACKLIST = {
+    "Poison (Purple Haze)",
+    "Orange (Magician's Red)",
+	"Greyscale (Magician's Red)",
+    "Greyscale (Crazy Diamond)",
+    "Greyscale (The Hand)",
+    "Greyscale (Red Hot Chili Pepper)",
+	"Greyscale (Gold Experience)",
+	"Greyscale (The World)",
+	"DEFAULT"
+}
+
+local RARITY_COLORS = {
+    ["Common"] = tonumber("0x8C929A"), ["Uncommon"] = tonumber("0x2E8B57"), ["Rare"] = tonumber("0x1874CD"),
+    ["Legendary"] = tonumber("0xFFD700"), ["Mythical"] = tonumber("0x5D3F6A"), ["Secret"] = tonumber("0xFF0055"), 
+    ["Special"] = tonumber("0x00FFFF"), ["Unknown"] = tonumber("0xFFFFFF")
+}
+
+local UI_COLORS = {
+    ["Common"] = Color3.fromRGB(140, 146, 154), ["Uncommon"] = Color3.fromRGB(46, 139, 87), ["Rare"] = Color3.fromRGB(24, 116, 205),
+    ["Legendary"] = Color3.fromRGB(255, 215, 0), ["Mythical"] = Color3.fromRGB(93, 63, 106), ["Unknown"] = Color3.fromRGB(150, 150, 150)
+}
+
+-- FILTER DICTIONARIES
+local DESIRED_RARITIES = {}
+local DESIRED_STANDS = {}
+local DESIRED_TRAITS = {}
+local DESIRED_EXTRAS = { ["Any Skin"] = false, ["Any Perfect Stat (5/S)"] = false, ["All Perfect Stats (5/S)"] = false }
+
+for r, _ in pairs(UI_COLORS) do DESIRED_RARITIES[r] = false end
+for s, _ in pairs(STAND_RARITIES) do DESIRED_STANDS[s] = false end
+for _, traits in pairs(TRAIT_CATEGORIES) do
+    for _, t in ipairs(traits) do DESIRED_TRAITS[t] = false end
+end
+
+-- ==========================================
+-- SAFE CONFIG LOAD (RUNS BEFORE UI)
+-- ==========================================
+local CONFIG_FILE = "BizarreLineageConfig.json"
+
+pcall(function()
+    if isfile and readfile and isfile(CONFIG_FILE) then
+        local raw = readfile(CONFIG_FILE)
+        local data = HttpService:JSONDecode(raw)
+        if type(data) == "table" then
+            if data.isAutoFarming ~= nil then isAutoFarming = data.isAutoFarming end
+            if data.isAutoUsing ~= nil then isAutoUsing = data.isAutoUsing end
+            if data.isConjurationFarming ~= nil then isConjurationFarming = data.isConjurationFarming end
+            if data.isAutoQuesting ~= nil then isAutoQuesting = data.isAutoQuesting end
+            if data.isAutoKilling ~= nil then isAutoKilling = data.isAutoKilling end
+            if data.targetConjuration ~= nil then targetConjuration = data.targetConjuration end
+            if data.globalUndergroundOffset ~= nil then globalUndergroundOffset = data.globalUndergroundOffset end
+            if data.useSafetyRetreat ~= nil then useSafetyRetreat = data.useSafetyRetreat end
+            if data.autoDodgeEnabled ~= nil then autoDodgeEnabled = data.autoDodgeEnabled end
+            if data.spamM1 ~= nil then spamM1 = data.spamM1 end
+            if data.spamM2 ~= nil then spamM2 = data.spamM2 end
+            if data.spamE ~= nil then spamE = data.spamE end
+            if data.spamR ~= nil then spamR = data.spamR end
+            if data.autoSummonStand ~= nil then autoSummonStand = data.autoSummonStand end
+            if data.akMode ~= nil then akMode = data.akMode end
+            if data.akStopBelow50 ~= nil then akStopBelow50 = data.akStopBelow50 end
+            if type(data.akTargetMobs) == "table" then akTargetMobs = data.akTargetMobs end
+            if type(data.DESIRED_RARITIES) == "table" then for k,v in pairs(data.DESIRED_RARITIES) do DESIRED_RARITIES[k] = v end end
+            if type(data.DESIRED_STANDS) == "table" then for k,v in pairs(data.DESIRED_STANDS) do DESIRED_STANDS[k] = v end end
+            if type(data.DESIRED_TRAITS) == "table" then for k,v in pairs(data.DESIRED_TRAITS) do DESIRED_TRAITS[k] = v end end
+            if type(data.DESIRED_EXTRAS) == "table" then for k,v in pairs(data.DESIRED_EXTRAS) do DESIRED_EXTRAS[k] = v end end
+        end
+    end
+end)
+
+-- ==========================================
+-- MOVEMENT & HELPER LOGIC
+-- ==========================================
+local function findTargetNPC(name)
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == name and (obj:IsA("Model") or obj:IsA("BasePart")) then return obj end
+    end
+    if getnilinstances then
+        for _, obj in ipairs(getnilinstances()) do
+            if obj.Name == name and (obj:IsA("Model") or obj:IsA("BasePart")) then return obj end
+        end
+    end
+    return nil
+end
+
+local function aggressiveTeleport(targetCFrame, holdDuration, yOffset)
+    yOffset = yOffset or 3 
+    targetCFrame = targetCFrame + Vector3.new(0, yOffset, 0)
+    local character = player.Character or player.CharacterAdded:Wait()
+    local hrp = character:WaitForChild("HumanoidRootPart")
+    if hrp.Anchored then hrp.Anchored = false end
+    local startTime = os.clock()
+    while os.clock() - startTime < holdDuration do
+        if character and character.Parent then
+            character:PivotTo(targetCFrame)
+            if hrp then
+                hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            end
+        end
+        task.wait() 
+    end
+    task.wait(0.2) 
+    if not hrp or not hrp.Parent then return false end
+    local distance = (hrp.Position - targetCFrame.Position).Magnitude
+    if distance < 15 then
+        hrp.Anchored = true
+        task.delay(0.5, function() if hrp then hrp.Anchored = false end end)
+        return true
+    else
+        return false
+    end
+end
+
+local function getPromptCFrame(prompt)
+    if not prompt or not prompt.Parent then return nil end
+    local parent = prompt.Parent
+    if parent:IsA("Model") then
+        local base = parent.PrimaryPart or parent:FindFirstChild("HumanoidRootPart") or parent:FindFirstChildWhichIsA("BasePart")
+        return base and base.CFrame or nil
+    elseif parent:IsA("BasePart") then
+        return parent.CFrame
+    end
+    return nil
+end
+
+local function emergencyUnanchor()
+    local c = player.Character
+    local hrp = c and c:FindFirstChild("HumanoidRootPart")
+    if hrp and hrp.Anchored then hrp.Anchored = false end
+end
+
+-- ==========================================
+-- AUTO DODGE LISTENER (VFX & I-FRAMES)
+-- ==========================================
+pcall(function()
+    ReplicatedStorage.requests.general.vfx.OnClientEvent:Connect(function(module, data)
+        if autoDodgeEnabled and isAutoKilling and data and data.Time == 2.08 then
+            task.spawn(function()
+                task.wait(1.5) 
+                globalPauseAttacks = true 
+                task.wait(0.45) 
+                
+                local c = player.Character
+                local ctrl = c and c:FindFirstChild("client_character_controller")
+                if ctrl and ctrl:FindFirstChild("Dodge") then
+                    pcall(function() ctrl.Dodge:FireServer({A = false, D = false, W = false, S = true}) end)
+                end
+                
+                task.wait(0.5) 
+                globalPauseAttacks = false 
+            end)
+        end
+    end)
+end)
+
+-- ==========================================
+-- GLOBAL AUTO-SUMMON BACKGROUND THREAD (UPDATED)
+-- ==========================================
+task.spawn(function()
+    while task.wait(1) do
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+            local liveFolder = workspace:FindFirstChild("Live")
+            local myLiveChar = liveFolder and liveFolder:FindFirstChild(player.Name)
+            
+            -- Verify the Stand_Weapon existence
+            local hasStand = char:FindFirstChild("Stand_Weapon") or (myLiveChar and myLiveChar:FindFirstChild("Stand_Weapon"))
+            
+            if autoSummonStand then
+                -- TOGGLE ON: Summon if missing
+                if not hasStand then
+                    pcall(function()
+                        if char:FindFirstChild("client_character_controller") and char.client_character_controller:FindFirstChild("SummonStand") then
+                            char.client_character_controller.SummonStand:FireServer()
+                        end
+                    end)
+                end
+            else
+                -- TOGGLE OFF: Desummon if present
+                if hasStand then
+                    pcall(function()
+                        if char:FindFirstChild("client_character_controller") and char.client_character_controller:FindFirstChild("SummonStand") then
+                            char.client_character_controller.SummonStand:FireServer()
+                        end
+                    end)
+                end
+            end
+        end
+    end
+end)
+
+-- ==========================================
+-- ROLL SCRAPER & WEBHOOK
+-- ==========================================
+local lastRollHash = ""
+
+local function getStandJSON()
+    local slotData = player:FindFirstChild("PlayerData") and player.PlayerData:FindFirstChild("SlotData")
+    local standVal = slotData and slotData:FindFirstChild("Stand")
+    if standVal and standVal.Value ~= "" then
+        local success, data = pcall(function() return HttpService:JSONDecode(standVal.Value) end)
+        if success and type(data) == "table" then return data end
+    end
+    return nil
+end
+
+local function checkRollAndWebhook()
+    local data = getStandJSON()
+    if not data then return false, "No JSON Data Found", "Unknown" end
+    
+    local sName = data.Name or "Unknown"
+    local sTrait = data.Trait or "None"
+    local sSkin = data.Skin or ""
+    local hasSkin = sSkin ~= ""
+    
+    local str = tonumber(data.Strength) or 0
+    local spd = tonumber(data.Speed) or 0
+    local spec = tonumber(data.Specialty) or 0
+    
+    local hasAnyMax = (str == 5 or spd == 5 or spec == 5)
+    local hasAllMax = (str == 5 and spd == 5 and spec == 5)
+    
+    local sRarity = STAND_RARITIES[sName] or "Unknown"
+    
+    local currentHash = sName .. sTrait .. sSkin .. tostring(str) .. tostring(spd) .. tostring(spec)
+    if currentHash == lastRollHash then return false, "", sName end
+    lastRollHash = currentHash
+    
+    -- Check Blacklisted Skins
+    local isBlacklistedSkin = false
+    if hasSkin then
+        for _, blacklisted in ipairs(SKIN_BLACKLIST) do
+            if sSkin == blacklisted then
+                isBlacklistedSkin = true
+                break
+            end
+        end
+    end
+
+    -- Filter Matching Logic
+    local matchReasons = {}
+    if DESIRED_STANDS[sName] then table.insert(matchReasons, "Stand") end
+    if DESIRED_RARITIES[sRarity] then table.insert(matchReasons, "Rarity") end
+    if DESIRED_TRAITS[sTrait] then table.insert(matchReasons, "Trait (" .. sTrait .. ")") end
+    
+    -- Modified Logic: Only match "Any Skin" if the skin is NOT in the blacklist
+    if DESIRED_EXTRAS["Any Skin"] and hasSkin and not isBlacklistedSkin then table.insert(matchReasons, "Skin") end
+    
+    if DESIRED_EXTRAS["Any Perfect Stat (5/S)"] and hasAnyMax then table.insert(matchReasons, "Perfect Stat") end
+    if DESIRED_EXTRAS["All Perfect Stats (5/S)"] and hasAllMax then table.insert(matchReasons, "All Perfect Stats") end
+    
+    local isMatch = #matchReasons > 0
+    
+    -- ONLY send webhook if the roll matched our filters
+    if isMatch then
+        local reasonStr = table.concat(matchReasons, ", ")
+        local embedColor = RARITY_COLORS[sRarity] or RARITY_COLORS["Unknown"]
+        local desc = string.format("**Trait:** %s\n**Skin:** %s\n**Strength:** %s\n**Speed:** %s\n**Specialty:** %s\n\n🎯 **Stopped For:** %s",
+            sTrait,
+            hasSkin and sSkin or "None",
+            tostring(str), tostring(spd), tostring(spec),
+            reasonStr
+        )
+        
+        local payload = {
+            ["username"] = "Bizarre Lineage Logger",
+            ["avatar_url"] = "https://tr.rbxcdn.com/38c6edcb50633730ff4cf39ac8859840/150/150/Image/Png",
+            ["embeds"] = {{
+                ["title"] = "🏹 Rolled: " .. sName .. " | " .. sRarity,
+                ["description"] = desc,
+                ["color"] = embedColor,
+                ["footer"] = { ["text"] = "Account: " .. player.Name },
+                ["timestamp"] = DateTime.now():ToIsoDate()
+            }}
+        }
+        
+        local req = (syn and syn.request) or (http and http.request) or request or http_request
+        if req then
+            pcall(function() req({Url = WEBHOOK_URL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(payload)}) end)
+        end
+        return true, reasonStr, sName
+    end
+    
+    return false, "", sName
+end
+
+local function getCurrentConjuration()
+    local pGui = player:FindFirstChild("PlayerGui")
+    local standInfo = pGui and pGui:FindFirstChild("menu") and pGui.menu:FindFirstChild("Stand Info")
+    if standInfo then
+        for _, v in ipairs(standInfo:GetDescendants()) do
+            if v:IsA("TextLabel") then
+                local txt = v.Text:gsub("\n", ""):match("^%s*(.-)%s*$")
+                if txt then
+                    local match = txt:match("^Stand Conjuration:%s*(%d+)")
+                    if match then return tonumber(match) end
+                end
+            end
+        end
+    end
+    return 0
+end
+
+-- ==========================================
+-- RAID WEBHOOK SCRAPER
+-- ==========================================
+local function sendRaidWebhook()
+    local pGui = player:FindFirstChild("PlayerGui")
+    local raidUI = pGui and pGui:FindFirstChild("raidcomplete") and pGui.raidcomplete:FindFirstChild("raid")
+    
+    if not raidUI then return end
+
+    local rankStr = "Unknown Rank"
+    local items = {}
+
+    for _, child in ipairs(raidUI:GetDescendants()) do
+        if child:IsA("TextLabel") or child:IsA("TextButton") then
+            local text = child.Text or ""
+            local name = child.Name or ""
+
+            -- Check for Rank
+            if string.find(string.upper(text), "RANK") then
+                rankStr = text:gsub("\n", "")
+            end
+            
+            -- Check for items (ignoring headers and ranks)
+            if name == "misc" and text ~= "Rewards" and text ~= "" and not string.find(string.upper(text), "RANK") then
+                local itemName = text:gsub("\n", "")
+                
+                -- Tally up duplicate items
+                if items[itemName] then
+                    items[itemName] = items[itemName] + 1
+                else
+                    items[itemName] = 1
+                end
+            end
+        end
+    end
+
+    local rewardsString = ""
+    for itemName, count in pairs(items) do
+        if count > 1 then
+            rewardsString = rewardsString .. "• " .. itemName .. " " .. count .. "x\n"
+        else
+            rewardsString = rewardsString .. "• " .. itemName .. "\n"
+        end
+    end
+
+    if rewardsString == "" then rewardsString = "None" end
+
+    local payload = {
+        ["username"] = "Bizarre Lineage Logger",
+        ["avatar_url"] = "https://tr.rbxcdn.com/38c6edcb50633730ff4cf39ac8859840/150/150/Image/Png",
+        ["embeds"] = {{
+            ["title"] = "⚔️ Raid Completed!",
+            ["description"] = string.format("**%s**\n\n**Rewards:**\n%s", rankStr, rewardsString),
+            ["color"] = tonumber("0xFF8C00"), 
+            ["footer"] = { ["text"] = "Account: " .. player.Name },
+            ["timestamp"] = DateTime.now():ToIsoDate()
+        }}
+    }
+    
+    local req = (syn and syn.request) or (http and http.request) or request or http_request
+    if req then
+        pcall(function() req({Url = WEBHOOK_URL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(payload)}) end)
+    end
+end
+
+-- ==========================================
+-- GUI SETUP
+-- ==========================================
+local oldGui = CoreGui:FindFirstChild("BizarreLineageGUI") or player.PlayerGui:FindFirstChild("BizarreLineageGUI")
+if oldGui then oldGui:Destroy() end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "BizarreLineageGUI"
+pcall(function() screenGui.Parent = CoreGui end)
+if screenGui.Parent == nil then screenGui.Parent = player:WaitForChild("PlayerGui") end
+
+-- MAIN MENU
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Size = UDim2.new(0, 240, 0, 445) 
+mainFrame.Position = UDim2.new(0.5, -300, 0.05, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
+
+local title = Instance.new("TextLabel", mainFrame)
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundTransparency = 1
+title.Text = "Bizarre Lineage Hub"
+title.TextColor3 = Color3.fromRGB(200, 150, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+
+local statusLabel = Instance.new("TextLabel", mainFrame)
+statusLabel.Size = UDim2.new(1, 0, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, 40)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Status: Idle"
+statusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+statusLabel.Font = Enum.Font.GothamSemibold
+statusLabel.TextSize = 13
+
+local toggleFarmBtn = Instance.new("TextButton", mainFrame)
+toggleFarmBtn.Size = UDim2.new(0.9, 0, 0, 40)
+toggleFarmBtn.Position = UDim2.new(0.05, 0, 0, 75)
+toggleFarmBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+toggleFarmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleFarmBtn.Font = Enum.Font.GothamBold
+toggleFarmBtn.TextSize = 13
+toggleFarmBtn.Text = "Auto-Farm Items [OFF]"
+Instance.new("UICorner", toggleFarmBtn).CornerRadius = UDim.new(0, 6)
+
+local autoUseBtn = Instance.new("TextButton", mainFrame)
+autoUseBtn.Size = UDim2.new(0.9, 0, 0, 40)
+autoUseBtn.Position = UDim2.new(0.05, 0, 0, 120)
+autoUseBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 110)
+autoUseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+autoUseBtn.Font = Enum.Font.GothamBold
+autoUseBtn.TextSize = 13
+autoUseBtn.Text = "Auto-Use Arrows [OFF]"
+Instance.new("UICorner", autoUseBtn).CornerRadius = UDim.new(0, 6)
+
+local toggleFiltersBtn = Instance.new("TextButton", mainFrame)
+toggleFiltersBtn.Size = UDim2.new(0.9, 0, 0, 40)
+toggleFiltersBtn.Position = UDim2.new(0.05, 0, 0, 165)
+toggleFiltersBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
+toggleFiltersBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleFiltersBtn.Font = Enum.Font.GothamBold
+toggleFiltersBtn.TextSize = 13
+toggleFiltersBtn.Text = "⚙️ Stand Filters"
+Instance.new("UICorner", toggleFiltersBtn).CornerRadius = UDim.new(0, 6)
+
+local toggleQuestBtn = Instance.new("TextButton", mainFrame)
+toggleQuestBtn.Size = UDim2.new(0.9, 0, 0, 40)
+toggleQuestBtn.Position = UDim2.new(0.05, 0, 0, 210)
+toggleQuestBtn.BackgroundColor3 = Color3.fromRGB(60, 140, 180)
+toggleQuestBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleQuestBtn.Font = Enum.Font.GothamBold
+toggleQuestBtn.TextSize = 13
+toggleQuestBtn.Text = "📜 Auto Quest Menu"
+Instance.new("UICorner", toggleQuestBtn).CornerRadius = UDim.new(0, 6)
+
+local toggleAutoKillBtn = Instance.new("TextButton", mainFrame)
+toggleAutoKillBtn.Size = UDim2.new(0.9, 0, 0, 40)
+toggleAutoKillBtn.Position = UDim2.new(0.05, 0, 0, 255)
+toggleAutoKillBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 60)
+toggleAutoKillBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleAutoKillBtn.Font = Enum.Font.GothamBold
+toggleAutoKillBtn.TextSize = 13
+toggleAutoKillBtn.Text = "🔪 Auto Kill & Combat"
+Instance.new("UICorner", toggleAutoKillBtn).CornerRadius = UDim.new(0, 6)
+
+local toggleConjurationBtn = Instance.new("TextButton", mainFrame)
+toggleConjurationBtn.Size = UDim2.new(0.9, 0, 0, 40) -- FIXED SIZE (Was 300)
+toggleConjurationBtn.Position = UDim2.new(0.05, 0, 0, 300)
+toggleConjurationBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 180)
+toggleConjurationBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleConjurationBtn.Font = Enum.Font.GothamBold
+toggleConjurationBtn.TextSize = 13
+toggleConjurationBtn.Text = "🔮 Conjuration Farm"
+Instance.new("UICorner", toggleConjurationBtn).CornerRadius = UDim.new(0, 6)
+
+local toggleGangBtn = Instance.new("TextButton", mainFrame)
+toggleGangBtn.Size = UDim2.new(0.9, 0, 0, 40) -- FIXED SIZE (Was 345)
+toggleGangBtn.Position = UDim2.new(0.05, 0, 0, 345)
+toggleGangBtn.BackgroundColor3 = Color3.fromRGB(180, 120, 40)
+toggleGangBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleGangBtn.Font = Enum.Font.GothamBold
+toggleGangBtn.TextSize = 13
+toggleGangBtn.Text = "⚔️ Gang-Farm Menu"
+Instance.new("UICorner", toggleGangBtn).CornerRadius = UDim.new(0, 6)
+
+local toggleGuideBtn = Instance.new("TextButton", mainFrame)
+toggleGuideBtn.Size = UDim2.new(0.9, 0, 0, 40) -- Size is 40
+toggleGuideBtn.Position = UDim2.new(0.05, 0, 0, 390) -- Position is 390
+toggleGuideBtn.BackgroundColor3 = Color3.fromRGB(60, 100, 180)
+toggleGuideBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleGuideBtn.Font = Enum.Font.GothamBold
+toggleGuideBtn.TextSize = 13
+toggleGuideBtn.Text = "View Stand Rarities"
+Instance.new("UICorner", toggleGuideBtn).CornerRadius = UDim.new(0, 6)
+
+-- ==========================================
+-- FILTERS MENU (Upgraded with Traits & Skins)
+-- ==========================================
+local filterFrame = Instance.new("Frame", screenGui)
+filterFrame.Size = UDim2.new(0, 240, 0, 350)
+filterFrame.Position = UDim2.new(0.5, -45, 0.05, 0)
+filterFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+filterFrame.BorderSizePixel = 0
+filterFrame.Active = true
+filterFrame.Draggable = true
+filterFrame.Visible = false
+Instance.new("UICorner", filterFrame).CornerRadius = UDim.new(0, 10)
+
+local filterTitle = Instance.new("TextLabel", filterFrame)
+filterTitle.Size = UDim2.new(1, 0, 0, 40)
+filterTitle.BackgroundTransparency = 1
+filterTitle.Text = "Stop Rolling If I Get:"
+filterTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+filterTitle.Font = Enum.Font.GothamBold
+filterTitle.TextSize = 15
+
+local filterScroll = Instance.new("ScrollingFrame", filterFrame)
+filterScroll.Size = UDim2.new(0.9, 0, 1, -50)
+filterScroll.Position = UDim2.new(0.05, 0, 0, 40)
+filterScroll.BackgroundTransparency = 1
+filterScroll.ScrollBarThickness = 4
+
+local filterLayout = Instance.new("UIListLayout", filterScroll)
+filterLayout.SortOrder = Enum.SortOrder.LayoutOrder
+filterLayout.Padding = UDim.new(0, 5)
+
+local function createToggle(text, dict, key, parentFrame, color)
+    local btn = Instance.new("TextButton", parentFrame)
+    btn.Size = UDim2.new(1, 0, 0, 30)
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 13
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+
+    if dict[key] then
+        btn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+        btn.Text = text .. " [ON]"
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    else
+        btn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+        btn.Text = text .. " [OFF]"
+        btn.TextColor3 = color or Color3.fromRGB(200, 200, 200)
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        dict[key] = not dict[key]
+        if dict[key] then
+            btn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+            btn.Text = text .. " [ON]"
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+            btn.Text = text .. " [OFF]"
+            btn.TextColor3 = color or Color3.fromRGB(200, 200, 200)
+        end
+    end)
+end
+
+local function addHeader(text, color)
+    local header = Instance.new("TextLabel", filterScroll)
+    header.Size = UDim2.new(1, 0, 0, 25)
+    header.BackgroundTransparency = 1
+    header.Text = "-- " .. text .. " --"
+    header.TextColor3 = color or Color3.fromRGB(255, 255, 255)
+    header.Font = Enum.Font.GothamBold
+    header.TextSize = 14
+end
+
+addHeader("Desired Rarities")
+local orderOfRarities = {"Common", "Uncommon", "Rare", "Legendary", "Mythical", "Unknown"}
+for _, r in ipairs(orderOfRarities) do createToggle(r, DESIRED_RARITIES, r, filterScroll, UI_COLORS[r]) end
+
+addHeader("Desired Stands")
+local sortedStands = {}
+for s, _ in pairs(STAND_RARITIES) do table.insert(sortedStands, s) end
+table.sort(sortedStands)
+for _, s in ipairs(sortedStands) do createToggle(s, DESIRED_STANDS, s, filterScroll, UI_COLORS[STAND_RARITIES[s]]) end
+
+addHeader("Desired Traits")
+local orderOfTraitCats = {"Mythical", "Legendary", "Rare", "Uncommon", "Common"}
+for _, cat in ipairs(orderOfTraitCats) do
+    addHeader(cat .. " Traits", UI_COLORS[cat])
+    for _, t in ipairs(TRAIT_CATEGORIES[cat]) do
+        createToggle(t, DESIRED_TRAITS, t, filterScroll, Color3.fromRGB(220, 220, 220))
+    end
+end
+
+addHeader("Extra Filters", Color3.fromRGB(200, 100, 255))
+createToggle("Any Skin", DESIRED_EXTRAS, "Any Skin", filterScroll, Color3.fromRGB(255, 255, 255))
+createToggle("Any Perfect Stat (5/S)", DESIRED_EXTRAS, "Any Perfect Stat (5/S)", filterScroll, Color3.fromRGB(255, 200, 50))
+createToggle("All Perfect Stats (5/S)", DESIRED_EXTRAS, "All Perfect Stats (5/S)", filterScroll, Color3.fromRGB(255, 200, 50))
+
+filterLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    filterScroll.CanvasSize = UDim2.new(0, 0, 0, filterLayout.AbsoluteContentSize.Y + 10)
+end)
+toggleFiltersBtn.MouseButton1Click:Connect(function() filterFrame.Visible = not filterFrame.Visible end)
+
+
+-- ==========================================
+-- AUTO QUEST MENU
+-- ==========================================
+local questFrame = Instance.new("Frame", screenGui)
+questFrame.Size = UDim2.new(0, 240, 0, 200)
+questFrame.Position = UDim2.new(0.5, 210, 0.05, 0)
+questFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+questFrame.BorderSizePixel = 0
+questFrame.Active = true
+questFrame.Draggable = true
+questFrame.Visible = false
+Instance.new("UICorner", questFrame).CornerRadius = UDim.new(0, 10)
+
+local questTitle = Instance.new("TextLabel", questFrame)
+questTitle.Size = UDim2.new(1, 0, 0, 40)
+questTitle.BackgroundTransparency = 1
+questTitle.Text = "Auto Quest"
+questTitle.TextColor3 = Color3.fromRGB(60, 140, 180)
+questTitle.Font = Enum.Font.GothamBold
+questTitle.TextSize = 15
+
+local questInfoLabel = Instance.new("TextLabel", questFrame)
+questInfoLabel.Size = UDim2.new(0.9, 0, 0, 60)
+questInfoLabel.Position = UDim2.new(0.05, 0, 0, 50)
+questInfoLabel.BackgroundTransparency = 1
+questInfoLabel.Text = "Current Objective:\nWaiting for UI..."
+questInfoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+questInfoLabel.Font = Enum.Font.GothamSemibold
+questInfoLabel.TextSize = 13
+questInfoLabel.TextWrapped = true
+
+local startQuestBtn = Instance.new("TextButton", questFrame)
+startQuestBtn.Size = UDim2.new(0.9, 0, 0, 45)
+startQuestBtn.Position = UDim2.new(0.05, 0, 0, 130)
+startQuestBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+startQuestBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+startQuestBtn.Font = Enum.Font.GothamBold
+startQuestBtn.TextSize = 13
+startQuestBtn.Text = "Start Questing [OFF]"
+Instance.new("UICorner", startQuestBtn).CornerRadius = UDim.new(0, 6)
+
+toggleQuestBtn.MouseButton1Click:Connect(function() questFrame.Visible = not questFrame.Visible end)
+
+
+-- ==========================================
+-- AUTO KILL & COMBAT SETTINGS MENU
+-- ==========================================
+local akFrame = Instance.new("Frame", screenGui)
+akFrame.Size = UDim2.new(0, 240, 0, 520) -- INCREASED HEIGHT TO FIT NEW TOGGLE
+akFrame.Position = UDim2.new(0.5, 210, 0.05, 0)
+akFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+akFrame.BorderSizePixel = 0
+akFrame.Active = true
+akFrame.Draggable = true
+akFrame.Visible = false
+Instance.new("UICorner", akFrame).CornerRadius = UDim.new(0, 10)
+
+local akTitle = Instance.new("TextLabel", akFrame)
+akTitle.Size = UDim2.new(1, 0, 0, 35)
+akTitle.BackgroundTransparency = 1
+akTitle.Text = "Auto Kill Targeter"
+akTitle.TextColor3 = Color3.fromRGB(200, 80, 60)
+akTitle.Font = Enum.Font.GothamBold
+akTitle.TextSize = 15
+
+local akDropdownBtn = Instance.new("TextButton", akFrame)
+akDropdownBtn.Size = UDim2.new(0.6, 0, 0, 30)
+akDropdownBtn.Position = UDim2.new(0.05, 0, 0, 35)
+akDropdownBtn.BackgroundColor3 = Color3.fromRGB(80, 120, 180)
+akDropdownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+akDropdownBtn.Font = Enum.Font.GothamBold
+akDropdownBtn.TextSize = 12
+akDropdownBtn.Text = "Select Mobs 🔽"
+Instance.new("UICorner", akDropdownBtn).CornerRadius = UDim.new(0, 4)
+
+local akClearBtn = Instance.new("TextButton", akFrame)
+akClearBtn.Size = UDim2.new(0.25, 0, 0, 30)
+akClearBtn.Position = UDim2.new(0.7, 0, 0, 35)
+akClearBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+akClearBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+akClearBtn.Font = Enum.Font.GothamBold
+akClearBtn.TextSize = 12
+akClearBtn.Text = "Clear"
+Instance.new("UICorner", akClearBtn).CornerRadius = UDim.new(0, 4)
+
+local akTargetsLabel = Instance.new("TextLabel", akFrame)
+akTargetsLabel.Size = UDim2.new(0.9, 0, 0, 30)
+akTargetsLabel.Position = UDim2.new(0.05, 0, 0, 70)
+akTargetsLabel.BackgroundTransparency = 1
+akTargetsLabel.Text = "Targets: None"
+akTargetsLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+akTargetsLabel.Font = Enum.Font.Gotham
+akTargetsLabel.TextSize = 12
+akTargetsLabel.TextWrapped = true
+akTargetsLabel.TextYAlignment = Enum.TextYAlignment.Top
+
+local akModeBtn = Instance.new("TextButton", akFrame)
+akModeBtn.Size = UDim2.new(0.9, 0, 0, 30)
+akModeBtn.Position = UDim2.new(0.05, 0, 0, 105)
+akModeBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
+akModeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+akModeBtn.Font = Enum.Font.GothamSemibold
+akModeBtn.TextSize = 13
+akModeBtn.Text = "Target Mode: INCLUDE"
+Instance.new("UICorner", akModeBtn).CornerRadius = UDim.new(0, 4)
+
+akModeBtn.MouseButton1Click:Connect(function()
+    if akMode == "Include" then
+        akMode = "Exclude"
+        akModeBtn.Text = "Target Mode: EXCLUDE"
+        akModeBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+    else
+        akMode = "Include"
+        akModeBtn.Text = "Target Mode: INCLUDE"
+        akModeBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
+    end
+end)
+
+local function createCombatToggle(text, startState, yPos, callback)
+    local btn = Instance.new("TextButton", akFrame)
+    btn.Size = UDim2.new(0.9, 0, 0, 30)
+    btn.Position = UDim2.new(0.05, 0, 0, yPos)
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 13
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+    local state = startState
+    local function updateVisuals()
+        if state then
+            btn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+            btn.Text = text .. " [ON]"
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+            btn.Text = text .. " [OFF]"
+        end
+        callback(state)
+    end
+    btn.MouseButton1Click:Connect(function()
+        state = not state
+        updateVisuals()
+    end)
+    updateVisuals()
+    return btn
+end
+
+createCombatToggle("Stop Below 50 HP", akStopBelow50, 140, function(s) akStopBelow50 = s end)
+createCombatToggle("Retreat Low HP (<30%)", useSafetyRetreat, 175, function(s) useSafetyRetreat = s end)
+createCombatToggle("Auto Dodge Highlight", autoDodgeEnabled, 210, function(s) autoDodgeEnabled = s end)
+
+-- SLIDER UI FOR UNDERGROUND OFFSET
+local offsetLabel = Instance.new("TextLabel", akFrame)
+offsetLabel.Size = UDim2.new(0.9, 0, 0, 20)
+offsetLabel.Position = UDim2.new(0.05, 0, 0, 245)
+offsetLabel.BackgroundTransparency = 1
+offsetLabel.Text = "Underground Offset: " .. globalUndergroundOffset .. " Studs"
+offsetLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+offsetLabel.Font = Enum.Font.GothamSemibold
+offsetLabel.TextSize = 12
+
+local sliderBg = Instance.new("TextButton", akFrame)
+sliderBg.Size = UDim2.new(0.9, 0, 0, 10)
+sliderBg.Position = UDim2.new(0.05, 0, 0, 265)
+sliderBg.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+sliderBg.AutoButtonColor = false
+sliderBg.Text = ""
+Instance.new("UICorner", sliderBg).CornerRadius = UDim.new(0, 5)
+
+local sliderFill = Instance.new("Frame", sliderBg)
+sliderFill.Size = UDim2.new(globalUndergroundOffset / 30, 0, 1, 0)
+sliderFill.BackgroundColor3 = Color3.fromRGB(60, 140, 180)
+Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(0, 5)
+
+local draggingSlider = false
+local function updateSlider(input)
+    local relativeX = math.clamp(input.Position.X - sliderBg.AbsolutePosition.X, 0, sliderBg.AbsoluteSize.X)
+    local percent = relativeX / sliderBg.AbsoluteSize.X
+    sliderFill.Size = UDim2.new(percent, 0, 1, 0)
+    globalUndergroundOffset = math.floor(percent * 30)
+    offsetLabel.Text = "Underground Offset: " .. globalUndergroundOffset .. " Studs"
+end
+
+sliderBg.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingSlider = true
+        updateSlider(input)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingSlider = false
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if draggingSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        updateSlider(input)
+    end
+end)
+
+createCombatToggle("Spam M1", spamM1, 285, function(s) spamM1 = s end)
+createCombatToggle("Spam M2", spamM2, 320, function(s) spamM2 = s end)
+createCombatToggle("Spam E Skill", spamE, 355, function(s) spamE = s end)
+createCombatToggle("Spam R Skill", spamR, 390, function(s) spamR = s end)
+
+-- NEW: AUTO SUMMON STAND TOGGLE
+createCombatToggle("Auto Summon Stand", autoSummonStand, 425, function(s) autoSummonStand = s end)
+
+local akStartBtn = Instance.new("TextButton", akFrame)
+akStartBtn.Size = UDim2.new(0.9, 0, 0, 40)
+akStartBtn.Position = UDim2.new(0.05, 0, 0, 465) -- Shifted down to accommodate the new toggle
+akStartBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+akStartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+akStartBtn.Font = Enum.Font.GothamBold
+akStartBtn.TextSize = 13
+akStartBtn.Text = "Start Auto Kill [OFF]"
+Instance.new("UICorner", akStartBtn).CornerRadius = UDim.new(0, 6)
+
+-- Dropdown Frame (High Z-Index)
+local ddFrame = Instance.new("Frame", akFrame)
+ddFrame.Size = UDim2.new(0.9, 0, 0, 150)
+ddFrame.Position = UDim2.new(0.05, 0, 0, 70)
+ddFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+ddFrame.BorderSizePixel = 1
+ddFrame.BorderColor3 = Color3.fromRGB(60, 140, 180)
+ddFrame.Visible = false
+ddFrame.ZIndex = 50
+ddFrame.Active = true
+
+local ddScroll = Instance.new("ScrollingFrame", ddFrame)
+ddScroll.Size = UDim2.new(1, 0, 1, 0)
+ddScroll.BackgroundTransparency = 1
+ddScroll.ScrollBarThickness = 4
+ddScroll.ZIndex = 51
+
+local ddLayout = Instance.new("UIListLayout", ddScroll)
+ddLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ddLayout.Padding = UDim.new(0, 2)
+
+local function refreshAkTargetsLabel()
+    local str = ""
+    for k, _ in pairs(akTargetMobs) do str = str .. k .. ", " end
+    if str == "" then str = "None" else str = str:sub(1, -3) end
+    akTargetsLabel.Text = "Targets: " .. str
+end
+
+local function populateDropdown()
+    for _, child in ipairs(ddScroll:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    
+    local uniqueMobs = {}
+    if workspace:FindFirstChild("Live") then
+        for _, mob in ipairs(workspace.Live:GetChildren()) do
+            if string.find(mob.Name, "Hostage") then continue end
+            if string.sub(mob.Name, 1, 1) == "." and mob.Name ~= player.Name then
+                local name = mob.Name:sub(2)
+                local base = name:match("^(.-)%w%w%w%w%w%w$")
+                if not base or base == "" then base = name end
+                uniqueMobs[base] = true
+            end
+        end
+    end
+
+    local count = 0
+    for mName, _ in pairs(uniqueMobs) do
+        local btn = Instance.new("TextButton", ddScroll)
+        btn.Size = UDim2.new(1, 0, 0, 25)
+        btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+        btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 12
+        btn.Text = mName
+        btn.ZIndex = 52
+        
+        btn.MouseButton1Click:Connect(function()
+            akTargetMobs[mName] = true
+            refreshAkTargetsLabel()
+            ddFrame.Visible = false
+        end)
+        count = count + 1
+    end
+    ddScroll.CanvasSize = UDim2.new(0, 0, 0, count * 27)
+end
+
+akDropdownBtn.MouseButton1Click:Connect(function()
+    if ddFrame.Visible then
+        ddFrame.Visible = false
+    else
+        populateDropdown()
+        ddFrame.Visible = true
+    end
+end)
+
+akClearBtn.MouseButton1Click:Connect(function()
+    akTargetMobs = {}
+    refreshAkTargetsLabel()
+end)
+
+toggleAutoKillBtn.MouseButton1Click:Connect(function() akFrame.Visible = not akFrame.Visible end)
+
+-- ==========================================
+-- CONJURATION FARM MENU
+-- ==========================================
+local conjFrame = Instance.new("Frame", screenGui)
+conjFrame.Size = UDim2.new(0, 240, 0, 180)
+conjFrame.Position = UDim2.new(0.5, 210, 0.05, 0)
+conjFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+conjFrame.BorderSizePixel = 0
+conjFrame.Active = true
+conjFrame.Draggable = true
+conjFrame.Visible = false
+Instance.new("UICorner", conjFrame).CornerRadius = UDim.new(0, 10)
+
+local conjTitle = Instance.new("TextLabel", conjFrame)
+conjTitle.Size = UDim2.new(1, 0, 0, 40)
+conjTitle.BackgroundTransparency = 1
+conjTitle.Text = "Stand Conjuration"
+conjTitle.TextColor3 = Color3.fromRGB(140, 60, 180)
+conjTitle.Font = Enum.Font.GothamBold
+conjTitle.TextSize = 15
+
+local targetBox = Instance.new("TextBox", conjFrame)
+targetBox.Size = UDim2.new(0.9, 0, 0, 40)
+targetBox.Position = UDim2.new(0.05, 0, 0, 50)
+targetBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+targetBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+targetBox.Font = Enum.Font.GothamSemibold
+targetBox.TextSize = 14
+targetBox.Text = "100"
+targetBox.PlaceholderText = "Target Level (1-100)"
+Instance.new("UICorner", targetBox).CornerRadius = UDim.new(0, 6)
+
+local startConjBtn = Instance.new("TextButton", conjFrame)
+startConjBtn.Size = UDim2.new(0.9, 0, 0, 45)
+startConjBtn.Position = UDim2.new(0.05, 0, 0, 110)
+startConjBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+startConjBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+startConjBtn.Font = Enum.Font.GothamBold
+startConjBtn.TextSize = 13
+startConjBtn.Text = "Start Farming [OFF]"
+Instance.new("UICorner", startConjBtn).CornerRadius = UDim.new(0, 6)
+
+toggleConjurationBtn.MouseButton1Click:Connect(function() conjFrame.Visible = not conjFrame.Visible end)
+
+
+-- ==========================================
+-- GANG-FARM MENU (Placeholder)
+-- ==========================================
+local gangFrame = Instance.new("Frame", screenGui)
+gangFrame.Size = UDim2.new(0, 240, 0, 150)
+gangFrame.Position = UDim2.new(0.5, 210, 0.05, 0)
+gangFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+gangFrame.BorderSizePixel = 0
+gangFrame.Active = true
+gangFrame.Draggable = true
+gangFrame.Visible = false
+Instance.new("UICorner", gangFrame).CornerRadius = UDim.new(0, 10)
+
+local gangTitle = Instance.new("TextLabel", gangFrame)
+gangTitle.Size = UDim2.new(1, 0, 0, 40)
+gangTitle.BackgroundTransparency = 1
+gangTitle.Text = "Gang-Farm Hub"
+gangTitle.TextColor3 = Color3.fromRGB(255, 200, 50)
+gangTitle.Font = Enum.Font.GothamBold
+gangTitle.TextSize = 15
+
+local gangLabel = Instance.new("TextLabel", gangFrame)
+gangLabel.Size = UDim2.new(0.9, 0, 0, 80)
+gangLabel.Position = UDim2.new(0.05, 0, 0, 50)
+gangLabel.BackgroundTransparency = 1
+gangLabel.Text = "Placeholder for Gang features.\nComing Soon!"
+gangLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+gangLabel.Font = Enum.Font.Gotham
+gangLabel.TextSize = 13
+gangLabel.TextWrapped = true
+
+toggleGangBtn.MouseButton1Click:Connect(function() gangFrame.Visible = not gangFrame.Visible end)
+
+-- ==========================================
+-- DYNAMIC RARITY GUIDE UI
+-- ==========================================
+local guideFrame = Instance.new("Frame", screenGui)
+guideFrame.Size = UDim2.new(0, 240, 0, 350)
+guideFrame.Position = UDim2.new(0.5, 210, 0.05, 0)
+guideFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+guideFrame.BorderSizePixel = 0
+guideFrame.Active = true
+guideFrame.Draggable = true
+guideFrame.Visible = false
+Instance.new("UICorner", guideFrame).CornerRadius = UDim.new(0, 10)
+
+local guideTitle = Instance.new("TextLabel", guideFrame)
+guideTitle.Size = UDim2.new(1, 0, 0, 40)
+guideTitle.BackgroundTransparency = 1
+guideTitle.Text = "Stand Directory"
+guideTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+guideTitle.Font = Enum.Font.GothamBold
+guideTitle.TextSize = 15
+
+local guideScroll = Instance.new("ScrollingFrame", guideFrame)
+guideScroll.Size = UDim2.new(0.9, 0, 1, -50)
+guideScroll.Position = UDim2.new(0.05, 0, 0, 40)
+guideScroll.BackgroundTransparency = 1
+guideScroll.ScrollBarThickness = 4
+guideScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+
+local listLayout2 = Instance.new("UIListLayout", guideScroll)
+listLayout2.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout2.Padding = UDim.new(0, 5)
+
+local categorizedStands = {["Common"]={}, ["Uncommon"]={}, ["Rare"]={}, ["Legendary"]={}, ["Mythical"]={}, ["Unknown"]={}}
+for sName, sRarity in pairs(STAND_RARITIES) do
+    if categorizedStands[sRarity] then table.insert(categorizedStands[sRarity], sName) end
+end
+
+for _, rarityName in ipairs(orderOfRarities) do
+    table.sort(categorizedStands[rarityName]) 
+    if #categorizedStands[rarityName] > 0 then
+        local gHeader = Instance.new("TextLabel", guideScroll)
+        gHeader.Size = UDim2.new(1, 0, 0, 25)
+        gHeader.BackgroundTransparency = 1
+        gHeader.Text = "--- " .. rarityName .. " ---"
+        gHeader.TextColor3 = UI_COLORS[rarityName] or Color3.fromRGB(255,255,255)
+        gHeader.Font = Enum.Font.GothamBold
+        gHeader.TextSize = 14
+        
+        for _, stand in ipairs(categorizedStands[rarityName]) do
+            local sLabel = Instance.new("TextLabel", guideScroll)
+            sLabel.Size = UDim2.new(1, 0, 0, 20)
+            sLabel.BackgroundTransparency = 1
+            sLabel.Text = stand
+            sLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+            sLabel.Font = Enum.Font.Gotham
+            sLabel.TextSize = 12
+        end
+    end
+end
+
+listLayout2:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    guideScroll.CanvasSize = UDim2.new(0, 0, 0, listLayout2.AbsoluteContentSize.Y + 10)
+end)
+
+toggleGuideBtn.MouseButton1Click:Connect(function() guideFrame.Visible = not guideFrame.Visible end)
+
+
+-- ==========================================
+-- AUTO-FARM LOGIC
+-- ==========================================
+targetBox.FocusLost:Connect(function()
+    local num = tonumber(targetBox.Text)
+    if num and num > 0 and num <= 100 then targetConjuration = num else targetBox.Text = tostring(targetConjuration) end
+end)
+
+local TARGET_ITEMS = { ["Stand Arrow"] = true, ["Stone Mask"] = true, ["Lucky Arrow"] = true }
+
+local function getNearestItem()
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return nil end
+
+    local nearestPrompt = nil
+    local shortestDistance = math.huge
+
+    for _, desc in ipairs(workspace:GetDescendants()) do
+        if desc:IsA("ProximityPrompt") and desc.Parent and TARGET_ITEMS[desc.Parent.Name] then
+            local part = desc.Parent
+            if part:IsA("BasePart") then
+                local distance = (part.Position - hrp.Position).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    nearestPrompt = desc
+                end
+            end
+        end
+    end
+    return nearestPrompt
+end
+
+local function firePrompt(prompt)
+    if not prompt then return end
+    local oldHold = prompt.HoldDuration
+    local oldDist = prompt.MaxActivationDistance
+    local oldLOS = prompt.RequiresLineOfSight
+    
+    prompt.HoldDuration = 0
+    prompt.MaxActivationDistance = math.huge
+    prompt.RequiresLineOfSight = false
+    
+    task.wait(0.1) 
+    if fireproximityprompt then fireproximityprompt(prompt) else prompt:InputHoldBegin() task.wait(0.1) prompt:InputHoldEnd() end
+    task.delay(0.5, function() prompt.HoldDuration = oldHold prompt.MaxActivationDistance = oldDist prompt.RequiresLineOfSight = oldLOS end)
+end
+
+-- THREAD 1: Farms items
+local function startFarmCycle()
+    task.spawn(function()
+        while isAutoFarming do
+            local char = player.Character
+            if not char or not char:FindFirstChild("HumanoidRootPart") then task.wait(1) continue end
+            
+            statusLabel.Text = "Status: Searching for items..."
+            local targetPrompt = getNearestItem()
+            
+            if targetPrompt and targetPrompt.Parent then
+                local itemName = targetPrompt.Parent.Name
+                statusLabel.Text = "Status: Teleporting to " .. itemName .. "!"
+                
+                local success = aggressiveTeleport(targetPrompt.Parent.CFrame, 0.5, 2)
+                if success and isAutoFarming then
+                    statusLabel.Text = "Status: Picking up " .. itemName .. "..."
+                    firePrompt(targetPrompt)
+                    task.wait(1)
+                end
+            else
+                statusLabel.Text = "Status: No items found. Waiting..."
+                task.wait(2) 
+            end
+        end
+        if not isAutoUsing and not isConjurationFarming and not isAutoQuesting and not isAutoKilling and not statusLabel.Text:match("Target Hit!") then statusLabel.Text = "Status: Idle" end
+    end)
+end
+
+-- THREAD 2: Auto-Use Arrows
+local function startAutoUseCycle()
+    task.spawn(function()
+        while isAutoUsing do
+            statusLabel.Text = "Status: Using Arrow..."
+            pcall(function()
+                ReplicatedStorage.requests.character.use_item:FireServer("Stand Arrow")
+                ReplicatedStorage.requests.general.update_hotabr:FireServer({})
+            end)
+            task.wait(ROLL_ANIMATION_TIME)
+            
+            local isMatch, matchedReason, standName = checkRollAndWebhook()
+            if isMatch then
+                isAutoUsing = false
+                autoUseBtn.Text = "Auto-Use Arrows [OFF]"
+                autoUseBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 110)
+                statusLabel.Text = "Status: Target Hit! (" .. standName .. ")"
+                break
+            end
+            task.wait(2) 
+        end
+        if not isAutoFarming and not isConjurationFarming and not isAutoQuesting and not isAutoKilling and not statusLabel.Text:match("Target Hit!") then statusLabel.Text = "Status: Idle" end
+    end)
+end
+
+-- THREAD 3: Conjuration Farm
+local function getMeditationMob()
+    local liveFolder = workspace:FindFirstChild("Live")
+    if not liveFolder then return nil end
+    local expectedPrefix = "." .. player.Name .. " entity clone"
+    for _, mob in ipairs(liveFolder:GetChildren()) do
+        if string.find(mob.Name, expectedPrefix, 1, true) then
+            local mobHrp = mob:FindFirstChild("HumanoidRootPart")
+            local mobHum = mob:FindFirstChild("Humanoid")
+            if mobHrp and mobHum and mobHum.Health > 0 then return mob end
+        end
+    end
+    return nil
+end
+
+local function startConjurationCycle()
+    task.spawn(function()
+        while isConjurationFarming do
+            local char = player.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then task.wait(1) continue end
+
+            local currentConj = getCurrentConjuration()
+            if currentConj >= targetConjuration then
+                isConjurationFarming = false
+                startConjBtn.Text = "Start Farming [OFF]"
+                startConjBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+                statusLabel.Text = "Status: Target Conjuration Reached!"
+                break
+            end
+
+            local mob = getMeditationMob()
+            
+            if mob then
+                statusLabel.Text = "Status: Fighting The Self..."
+                local mobHrp = mob:FindFirstChild("HumanoidRootPart")
+
+                while isConjurationFarming and mob and mob.Parent and mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 do
+                    if not char or not char.Parent or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then break end
+
+                    if mobHrp and hrp then
+                        local targetPos = mobHrp.Position - Vector3.new(0, 7, 0)
+                        hrp.CFrame = CFrame.lookAt(targetPos, mobHrp.Position)
+                        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                        pcall(function() char.client_character_controller.M1:FireServer(true, false) end)
+                    end
+                    task.wait() 
+                end
+                
+                statusLabel.Text = "Status: Waiting for Return Teleport..."
+                local timeout = 0
+                while hrp.Position.Y > 1000 and timeout < 15 and isConjurationFarming do
+                    task.wait(0.5)
+                    timeout = timeout + 0.5
+                end
+                task.wait(2) 
+
+            elseif hrp.Position.Y > 1000 then
+                statusLabel.Text = "Status: Spawning Boss..."
+                local targetInstance = findTargetNPC("The Self")
+                if targetInstance then
+                    pcall(function() ReplicatedStorage.requests.character.dialogue:FireServer(targetInstance, "Yes.") end)
+                    statusLabel.Text = "Status: Waiting for Boss..."
+                    local timeout = 0
+                    while not getMeditationMob() and timeout < 15 and isConjurationFarming do
+                        task.wait(0.5)
+                        timeout = timeout + 0.5
+                    end
+                else
+                    statusLabel.Text = "Status: NPC 'The Self' not found!"
+                    task.wait(1)
+                end
+            else
+                statusLabel.Text = "Status: Going to Meditation Mat..."
+                local matFolder = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Meditation")
+                local matPrompt = nil
+                if matFolder then
+                    for _, desc in ipairs(matFolder:GetDescendants()) do
+                        if desc:IsA("ProximityPrompt") and desc.ObjectText == "Yoga Mat" then
+                            matPrompt = desc
+                            break
+                        end
+                    end
+                end
+                if matPrompt then
+                    local targetCF = getPromptCFrame(matPrompt)
+                    if targetCF then
+                        aggressiveTeleport(targetCF, 0.5, 3)
+                        task.wait(1.5)
+                        firePrompt(matPrompt)
+                        statusLabel.Text = "Status: Awaiting Teleport..."
+                        local timeout = 0
+                        while hrp.Position.Y < 1000 and timeout < 15 and isConjurationFarming do
+                            task.wait(0.5)
+                            timeout = timeout + 0.5
+                        end
+                    end
+                else
+                    statusLabel.Text = "Status: Mat Not Found!"
+                    task.wait(2)
+                end
+            end
+            task.wait(0.1)
+        end
+        if not isAutoFarming and not isAutoUsing and not isAutoQuesting and not isAutoKilling and not statusLabel.Text:match("Target Hit!") then statusLabel.Text = "Status: Idle" end
+    end)
+end
+
+-- ==========================================
+-- THREAD 4: AUTO QUEST LOGIC
+-- ==========================================
+local function getActiveQuestObjective()
+    local pGui = player:FindFirstChild("PlayerGui")
+    local taskHolder = pGui and pGui:FindFirstChild("menu") and pGui.menu:FindFirstChild("task_holder")
+    if not taskHolder then return { type = "NotFound" } end
+
+    local questName = "Unknown Quest"
+    for _, v in ipairs(taskHolder:GetDescendants()) do
+        if v:IsA("TextLabel") and v.Visible then
+            local rawTxt = v.ContentText ~= "" and v.ContentText or v.Text
+            local txt = rawTxt:gsub("\n", ""):match("^%s*(.-)%s*$")
+            if txt and txt ~= "" then
+                if questName == "Unknown Quest" and not txt:match("time remain") and not txt:match("%d%d:%d%d") and v.Name ~= "description" and not txt:match("^Defeat") and not txt:match("^Talk") then
+                    questName = txt
+                end
+                local defeatTarget, current, max = txt:match("^Defeat%s+([%w%s]+)%s*[^%d]*(%d+)/(%d+)")
+                if defeatTarget then
+                    defeatTarget = defeatTarget:match("^%s*(.-)%s*$")
+                    if defeatTarget ~= "" then return { type = "Defeat", target = defeatTarget, progress = tonumber(current), max = tonumber(max), questName = questName } end
+                end
+                local talkTarget = txt:match("^Talk to%s*:?%s*(.*)") or txt:match("^Speak to%s*:?%s*(.*)") or txt:match("^Return to%s*:?%s*(.*)") or txt:match("^Interact with%s*:?%s*(.*)")
+                if talkTarget then
+                    talkTarget = talkTarget:gsub("[%[%]「」]", ""):gsub("%.%s*$", ""):match("^%s*(.-)%s*$")
+                    if talkTarget ~= "" then return { type = "Talk", target = talkTarget, questName = questName } end
+                end
+            end
+        end
+    end
+    return { type = "NotFound" }
+end
+
+local function getQuestTargetMob(mobName)
+    local liveFolder = workspace:FindFirstChild("Live")
+    if not liveFolder or not mobName or mobName == "" then return nil end
+    local searchPrefix = "." .. mobName
+    local prefixLen = #searchPrefix
+    for _, mob in ipairs(liveFolder:GetChildren()) do
+        if string.sub(mob.Name, 1, prefixLen) == searchPrefix then
+            local suffix = string.sub(mob.Name, prefixLen + 1)
+            if suffix:match("^[%w]*$") then
+                local mobHrp = mob:FindFirstChild("HumanoidRootPart")
+                local mobHum = mob:FindFirstChild("Humanoid")
+                if mobHrp and mobHum and mobHum.Health > 0 then return mob end
+            end
+        end
+    end
+    return nil
+end
+
+local function startQuestCycle()
+    task.spawn(function()
+        while isAutoQuesting do
+            local char = player.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then task.wait(1) continue end
+
+            local objective = getActiveQuestObjective()
+
+            if objective.type == "NotFound" then
+                questInfoLabel.Text = "Current Objective:\nWaiting for UI..."
+                statusLabel.Text = "Status: Awaiting Quest..."
+                task.wait(1)
+                continue
+            end
+
+            if objective.type == "Talk" then
+                questInfoLabel.Text = string.format("Quest: %s\nObjective: Talk to %s", objective.questName, objective.target)
+                statusLabel.Text = "Status: Going to " .. objective.target
+                local npc = findTargetNPC(objective.target)
+                local qBrick = workspace:FindFirstChild("Effects") and workspace.Effects:FindFirstChild("questbrick") and workspace.Effects.questbrick:FindFirstChild("questbrick")
+                local targetCF = getPromptCFrame(npc) or getPromptCFrame(qBrick)
+                local prompt = (npc and npc:FindFirstChildWhichIsA("ProximityPrompt", true)) or (qBrick and qBrick:FindFirstChildWhichIsA("ProximityPrompt", true))
+
+                if targetCF then
+                    aggressiveTeleport(targetCF, 0.5, 3)
+                    task.wait(0.5)
+                    if prompt then firePrompt(prompt) end
+                    if npc then pcall(function() ReplicatedStorage.requests.character.dialogue:FireServer(npc, 1) end) end
+                else
+                    statusLabel.Text = "Status: Cannot find " .. objective.target
+                end
+                task.wait(1)
+
+            elseif objective.type == "Defeat" then
+                questInfoLabel.Text = string.format("Quest: %s\nObjective: Defeat %s (%d/%d)", objective.questName, objective.target, objective.progress, objective.max)
+                local mob = getQuestTargetMob(objective.target)
+                if mob then
+                    statusLabel.Text = "Status: Fighting " .. objective.target .. "..."
+                    local mobHrp = mob:FindFirstChild("HumanoidRootPart")
+
+                    while isAutoQuesting and mob and mob.Parent and mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 do
+                        if not char or not char.Parent or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then break end
+
+                        if mobHrp and hrp then
+                            local targetPos = mobHrp.Position - Vector3.new(0, 7, 0)
+                            hrp.CFrame = CFrame.lookAt(targetPos, mobHrp.Position)
+                            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                            hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                            pcall(function() char.client_character_controller.M1:FireServer(true, false) end)
+                        end
+                        task.wait()
+                    end
+                else
+                    local qBrick = workspace:FindFirstChild("Effects") and workspace.Effects:FindFirstChild("questbrick") and workspace.Effects.questbrick:FindFirstChild("questbrick")
+                    local prompt = qBrick and qBrick:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if qBrick and prompt then
+                        statusLabel.Text = "Status: Spawning " .. objective.target .. "..."
+                        aggressiveTeleport(qBrick.CFrame, 0.5, 3)
+                        task.wait(0.5)
+                        firePrompt(prompt)
+                        local closestNPC = nil
+                        local closestDist = 20
+                        local npcsFolder = workspace:FindFirstChild("Npcs")
+                        if npcsFolder then
+                            for _, n in ipairs(npcsFolder:GetChildren()) do
+                                local tCF = getPromptCFrame(n)
+                                if tCF and (tCF.Position - qBrick.Position).Magnitude < closestDist then
+                                    closestDist = (tCF.Position - qBrick.Position).Magnitude
+                                    closestNPC = n
+                                end
+                            end
+                        end
+                        if closestNPC then pcall(function() ReplicatedStorage.requests.character.dialogue:FireServer(closestNPC, 1) end) end
+                        task.wait(1.5)
+                    else
+                        statusLabel.Text = "Status: Searching for " .. objective.target .. "..."
+                        task.wait(1)
+                    end
+                end
+            end
+            task.wait(0.1)
+        end
+        if not isAutoFarming and not isAutoUsing and not isConjurationFarming and not isAutoKilling and not statusLabel.Text:match("Target Hit!") then statusLabel.Text = "Status: Idle" end
+    end)
+end
+
+-- ==========================================
+-- THREAD 5: AUTO KILL LOGIC
+-- ==========================================
+local function getAutoKillTarget()
+    local liveFolder = workspace:FindFirstChild("Live")
+    if not liveFolder then return nil end
+
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return nil end
+
+    local closestMob = nil
+    local closestDist = math.huge
+
+    for _, mob in ipairs(liveFolder:GetChildren()) do
+        if string.find(mob.Name, "Hostage") then continue end
+
+        local mobHrp = mob:FindFirstChild("HumanoidRootPart")
+        local mobHum = mob:FindFirstChild("Humanoid")
+        
+        if mobHrp and mobHum and mobHum.Health > 0 then
+            if akStopBelow50 and mobHum.Health <= 50 then continue end
+            
+            if string.sub(mob.Name, 1, 1) == "." and mob.Name ~= player.Name then
+                local cleanName = mob.Name:sub(2)
+                local isSelected = false
+                for sName, _ in pairs(akTargetMobs) do
+                    if string.sub(cleanName, 1, #sName) == sName then
+                        isSelected = true
+                        break
+                    end
+                end
+
+                local isValidTarget = false
+                if akMode == "Include" then isValidTarget = isSelected else isValidTarget = not isSelected end
+
+                if isValidTarget then
+                    local dist = (mobHrp.Position - hrp.Position).Magnitude
+                    if dist < closestDist then
+                        closestDist = dist
+                        closestMob = mob
+                    end
+                end
+            end
+        end
+    end
+    return closestMob
+end
+
+local function startAutoKillCycle()
+    task.spawn(function()
+        while isAutoKilling do
+            local char = player.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then task.wait(1) continue end
+
+            local mob = getAutoKillTarget()
+            
+            if mob then
+                local cleanName = mob.Name:gsub("^%.", "")
+                statusLabel.Text = "Status: Slaying " .. cleanName:sub(1, 15) .. "..."
+                local mobHrp = mob:FindFirstChild("HumanoidRootPart")
+                local mobHum = mob:FindFirstChild("Humanoid")
+
+                while isAutoKilling and mob and mob.Parent and mobHum and mobHum.Health > 0 do
+                    if not char or not char.Parent or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then break end
+
+                    if akStopBelow50 and mobHum.Health <= 50 then break end
+                    
+                    local hum = char:FindFirstChild("Humanoid")
+                    if useSafetyRetreat and hum and hum.Health > 0 and (hum.Health / hum.MaxHealth) <= 0.3 then
+                        statusLabel.Text = "Status: Low HP! Healing..."
+                        hrp.CFrame = hrp.CFrame - Vector3.new(0, 20, 0)
+                        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                        hrp.Anchored = true
+                        while isAutoKilling and hum.Parent and hum.Health > 0 and (hum.Health / hum.MaxHealth) < 0.8 do
+                            task.wait(0.5)
+                        end
+                        hrp.Anchored = false
+                        continue
+                    end
+                    
+                    if mobHrp and hrp then
+                        local targetPos = mobHrp.Position - Vector3.new(0, globalUndergroundOffset, 0)
+                        hrp.CFrame = CFrame.lookAt(targetPos, mobHrp.Position)
+                        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                        
+                        if not globalPauseAttacks then
+                            local ctrl = char:FindFirstChild("client_character_controller")
+                            if ctrl then
+                                if spamM1 and ctrl:FindFirstChild("M1") then pcall(function() ctrl.M1:FireServer(true, false) end) end
+                                if spamM2 and ctrl:FindFirstChild("M2") then pcall(function() ctrl.M2:FireServer(true, true) end) end
+                                if spamE and ctrl:FindFirstChild("Skill") then pcall(function() ctrl.Skill:FireServer("E", true) end) end
+                                if spamR and ctrl:FindFirstChild("Skill") then pcall(function() ctrl.Skill:FireServer("R", true) end) end
+                            end
+                        end
+                    end
+                    task.wait()
+                end
+            else
+                statusLabel.Text = "Status: Scanning for Kill Targets..."
+                task.wait(1)
+            end
+        end
+        if not isAutoFarming and not isAutoUsing and not isAutoQuesting and not isConjurationFarming and not statusLabel.Text:match("Target Hit!") then statusLabel.Text = "Status: Idle" end
+    end)
+end
+
+-- ==========================================
+-- GAMEMODE SPECIFIC LOGIC (RAID AUTO-RESTART & AUTO-BUY)
+-- ==========================================
+if game.PlaceId == 74747090658891 then
+    
+    -- NEW: DESTROY MAIN MENU GUI ON LOAD
+    pcall(function()
+        local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui", 10)
+        if playerGui then
+            local menu = playerGui:FindFirstChild("Main Menu")
+            if menu then menu:Destroy() end
+        end
+    end)
+
+    task.spawn(function()
+	
+		local hasSentWebhook = false 
+        
+        -- ==========================================
+        -- 1. AUTO-BUY SHOP LISTENER
+        -- ==========================================
+        local raidShopRemote = game:GetService("ReplicatedStorage").requests.character:FindFirstChild("raid_shop")
+        
+        if raidShopRemote then
+            local shopConnection
+            -- Listen for the server sending the shop data to the client
+            shopConnection = raidShopRemote.OnClientEvent:Connect(function(data)
+                
+                if data and type(data) == "table" and data.Type == "UpdateRaidShop" and data.RaidShop then
+                    
+                    -- Define what we want to buy and the maximum amount
+                    local wantedItems = {
+                        ["Lucky Arrow"] = 1,
+                        ["Legendary Chest"] = 1
+                    }
+                    
+                    -- Loop through all bosses in the shop data (Jotaro, DIO, Kira, etc.)
+                    for bossName, bossShopData in pairs(data.RaidShop) do
+                        if type(bossShopData) == "table" then
+                            
+                            -- Check if the boss has the items we want
+                            for itemName, maxAmount in pairs(wantedItems) do
+                                local itemData = bossShopData[itemName]
+                                
+                                -- If the item exists in their shop and has stock
+                                if itemData and itemData.Stock and itemData.Stock > 0 then
+                                    
+                                    -- Calculate how many to buy (limited by stock and our maxAmount)
+                                    local amountToBuy = math.min(itemData.Stock, maxAmount)
+                                    
+                                    for i = 1, amountToBuy do
+                                        task.wait(0.3) -- Small delay to prevent remote spam kicks
+                                        pcall(function()
+                                            raidShopRemote:FireServer(itemName, bossName)
+                                        end)
+                                        print("[Auto-Buy] Purchased " .. itemName .. " (" .. i .. "/" .. amountToBuy .. ") from " .. bossName)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
+                    -- Disconnect listener after processing to prevent spamming remotes
+                    if shopConnection then shopConnection:Disconnect() end
+                end
+            end)
+        end
+
+        -- ==========================================
+        -- 2. INITIAL SPAWN EXECUTION
+        -- ==========================================
+        task.wait(1.5)
+        pcall(function()
+            game:GetService("ReplicatedStorage").requests.character.spawn:FireServer()
+        end)
+
+        -- List of all final bosses you want to trigger the restart
+        local RAID_BOSSES = {
+            "Yoshikage Kira Bites",
+            "Jotaro Kujo",
+            "Muhammad Avdol",
+            "Add Boss here"
+        }
+
+        -- ==========================================
+        -- 3. BACKGROUND BOSS MONITOR
+        -- ==========================================
+        while task.wait(1) do
+            local liveFolder = workspace:FindFirstChild("Live")
+            if liveFolder then
+                local bossMob = nil
+                
+                -- Search the live folder
+                for _, mob in ipairs(liveFolder:GetChildren()) do
+                    for _, bossName in ipairs(RAID_BOSSES) do
+                        if string.find(mob.Name, bossName) then
+                            bossMob = mob
+                            break
+                        end
+                    end
+                    if bossMob then break end
+                end
+
+                -- If the boss spawned, wait for it to be defeated
+                if bossMob then
+                    local hum = bossMob:FindFirstChild("Humanoid")
+                    
+                    while bossMob.Parent == liveFolder and hum and hum.Health > 0 do
+                        task.wait(0.5)
+                    end
+                    
+                    task.wait(2) -- Buffer for death animations
+                    
+                    -- Send Webhook before restarting (Ensure your sendRaidWebhook function is above this in your main script)
+                    if sendRaidWebhook then sendRaidWebhook() end
+                    
+                    task.wait(0.5)
+                    
+                    pcall(function()
+                        game:GetService("ReplicatedStorage").requests.character.retryraid:FireServer()
+                    end)
+                    
+                    task.wait(15)
+                end
+            end
+        end
+    end)
+end
+
+-- ==========================================
+-- BUTTON TOGGLE BINDINGS
+-- ==========================================
+toggleFarmBtn.MouseButton1Click:Connect(function()
+    isAutoFarming = not isAutoFarming
+    if isAutoFarming then
+        toggleFarmBtn.Text = "Auto-Farm Items [ON]"
+        toggleFarmBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+        startFarmCycle()
+    else
+        toggleFarmBtn.Text = "Auto-Farm Items [OFF]"
+        toggleFarmBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    end
+end)
+
+autoUseBtn.MouseButton1Click:Connect(function()
+    isAutoUsing = not isAutoUsing
+    if isAutoUsing then
+        autoUseBtn.Text = "Auto-Use Arrows [ON]"
+        autoUseBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+        startAutoUseCycle()
+    else
+        autoUseBtn.Text = "Auto-Use Arrows [OFF]"
+        autoUseBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 110)
+    end
+end)
+
+startConjBtn.MouseButton1Click:Connect(function()
+    isConjurationFarming = not isConjurationFarming
+    if isConjurationFarming then
+        startConjBtn.Text = "Start Farming [ON]"
+        startConjBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+        startConjurationCycle()
+    else
+        startConjBtn.Text = "Start Farming [OFF]"
+        startConjBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        emergencyUnanchor()
+    end
+end)
+
+startQuestBtn.MouseButton1Click:Connect(function()
+    isAutoQuesting = not isAutoQuesting
+    if isAutoQuesting then
+        startQuestBtn.Text = "Start Questing [ON]"
+        startQuestBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+        startQuestCycle()
+    else
+        startQuestBtn.Text = "Start Questing [OFF]"
+        startQuestBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        questInfoLabel.Text = "Current Objective:\nWaiting for UI..."
+        emergencyUnanchor()
+    end
+end)
+
+akStartBtn.MouseButton1Click:Connect(function()
+    isAutoKilling = not isAutoKilling
+    if isAutoKilling then
+        akStartBtn.Text = "Start Auto Kill [ON]"
+        akStartBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+        startAutoKillCycle()
+    else
+        akStartBtn.Text = "Start Auto Kill [OFF]"
+        akStartBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        emergencyUnanchor()
+    end
+end)
+
+-- ==========================================
+-- AUTO START BACKGROUND THREADS FROM CONFIG
+-- ==========================================
+if isAutoFarming then startFarmCycle() end
+if isAutoUsing then startAutoUseCycle() end
+if isConjurationFarming then startConjurationCycle() end
+if isAutoQuesting then startQuestCycle() end
+if isAutoKilling then startAutoKillCycle() end
+
+-- ==========================================
+-- BACKGROUND DATA SAVING
+-- ==========================================
+task.spawn(function()
+    while task.wait(5) do
+        pcall(function()
+            if writefile then
+                local data = {
+                    isAutoFarming = isAutoFarming,
+                    isAutoUsing = isAutoUsing,
+                    isConjurationFarming = isConjurationFarming,
+                    isAutoQuesting = isAutoQuesting,
+                    isAutoKilling = isAutoKilling,
+                    targetConjuration = targetConjuration,
+                    globalUndergroundOffset = globalUndergroundOffset,
+                    useSafetyRetreat = useSafetyRetreat,
+                    autoDodgeEnabled = autoDodgeEnabled,
+                    spamM1 = spamM1,
+                    spamM2 = spamM2,
+                    spamE = spamE,
+                    spamR = spamR,
+                    autoSummonStand = autoSummonStand,
+                    akMode = akMode,
+                    akStopBelow50 = akStopBelow50,
+                    akTargetMobs = akTargetMobs,
+                    DESIRED_RARITIES = DESIRED_RARITIES,
+                    DESIRED_STANDS = DESIRED_STANDS,
+                    DESIRED_TRAITS = DESIRED_TRAITS,
+                    DESIRED_EXTRAS = DESIRED_EXTRAS
+                }
+                writefile(CONFIG_FILE, HttpService:JSONEncode(data))
+            end
+        end)
+    end
+end)
