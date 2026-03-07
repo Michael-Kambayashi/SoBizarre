@@ -69,7 +69,7 @@ local SKIN_BLACKLIST = {
     "Greyscale (Crazy Diamond)",
 	"Reverso (Crazy Diamond)",
     "Greyscale (The Hand)",
-	"Purple (The Hand)"
+	"Purple (The Hand)",
     "Greyscale (Red Hot Chili Pepper)",
 	"Greyscale (Gold Experience)",
 	"Green (Gold Experience)",
@@ -1565,6 +1565,7 @@ end
 -- ==========================================
 if game.PlaceId == 74747090658891 then
     
+    -- 1. DESTROY MAIN MENU GUI ON LOAD
     pcall(function()
         local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui", 10)
         if playerGui then
@@ -1574,64 +1575,57 @@ if game.PlaceId == 74747090658891 then
     end)
 
     task.spawn(function()
-	
-		local hasSentWebhook = false 
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local StarterGui = game:GetService("StarterGui")
+        local raidShopRemote = ReplicatedStorage.requests.character:FindFirstChild("raid_shop")
+        local notifRemote = ReplicatedStorage.requests.general:FindFirstChild("notification")
 
-		-- ==========================================
-		-- AUTO-BUY LOGIC (DIRECT FIRE)
-		-- ==========================================
-		task.spawn(function()
-		    local raidShopRemote = ReplicatedStorage.requests.character:FindFirstChild("raid_shop")
-		    local notifRemote = ReplicatedStorage.requests.general:FindFirstChild("notification")
-		
-		    -- Helper function for notifications
-		    local function SendNotif(title, text)
-		        pcall(function()
-		            StarterGui:SetCore("SendNotification", {
-		                Title = title,
-		                Text = text,
-		                Duration = 3
-		            })
-		        end)
-		    end
-		
-		    if raidShopRemote and notifRemote then
-		        local isBroke = false
-		        local brokeListener
-		
-		        -- 1. Setup Listener specifically for the "You're too broke" message
-		        brokeListener = notifRemote.OnClientEvent:Connect(function(msg)
-		            -- We match the string "You're too broke"
-		            if tostring(msg):find("You're too broke") then
-		                isBroke = true
-		            end
-		        end)
-		
-		        -- 2. Attempt to buy Lucky Arrow (Priority)
-		        SendNotif("🛒 Auto-Buy", "Attempting to buy Lucky Arrow...")
-		        raidShopRemote:FireServer("Lucky Arrow", "Yoshikage Kira Bites the Dust")
-		
-		        -- 3. Wait for server
-		        -- We wait 1.5 seconds. If we are broke, the server sends the notification 
-		        -- during this time, and our listener sets isBroke = true.
-		        task.wait(1.5)
-		
-		        -- 4. Logic Check
-		        if isBroke then
-		            SendNotif("💸 Broke Alert", "Insufficient funds. Skipped Legendary Chest.")
-		        else
-		            -- If we didn't get the broke message, buy the chest
-		            SendNotif("💰 Purchasing", "Buying Legendary Chest...")
-		            raidShopRemote:FireServer("Legendary Chest", "Yoshikage Kira Bites the Dust")
-		        end
-		
-		        -- 5. Clean up the listener so it doesn't run in the background
-		        if brokeListener then brokeListener:Disconnect() end
-		    end
-		end)
+        -- Helper notification function
+        local function SendRaidNotif(title, text)
+            pcall(function()
+                StarterGui:SetCore("SendNotification", {
+                    Title = title, Text = text, Duration = 3
+                })
+            end)
+        end
         
         -- ==========================================
-        -- 1. INITIAL SPAWN EXECUTION
+        -- 1. AUTO-BUY LOGIC (DIRECT FIRE)
+        -- ==========================================
+        if raidShopRemote and notifRemote then
+            -- Wait a moment for things to load
+            task.wait(1)
+
+            local isBroke = false
+            local brokeListener
+            
+            -- Listen for "You're too broke"
+            brokeListener = notifRemote.OnClientEvent:Connect(function(msg)
+                if tostring(msg):find("You're too broke") then
+                    isBroke = true
+                end
+            end)
+
+            -- A. Attempt to buy Lucky Arrow
+            SendRaidNotif("🛒 Auto-Buy", "Buying Lucky Arrow...")
+            raidShopRemote:FireServer("Lucky Arrow", "Yoshikage Kira Bites the Dust")
+
+            -- B. Critical Wait (Check for broke message)
+            task.wait(1.5)
+
+            -- C. Logic Check
+            if isBroke then
+                SendRaidNotif("💸 Broke Alert", "Skipped Chest (Insufficient Funds).")
+            else
+                SendRaidNotif("💰 Purchasing", "Buying Legendary Chest...")
+                raidShopRemote:FireServer("Legendary Chest", "Yoshikage Kira Bites the Dust")
+            end
+
+            if brokeListener then brokeListener:Disconnect() end
+        end
+        
+        -- ==========================================
+        -- 2. INITIAL SPAWN EXECUTION
         -- ==========================================
         task.wait(1.5)
         pcall(function()
@@ -1647,7 +1641,7 @@ if game.PlaceId == 74747090658891 then
         }
 
         -- ==========================================
-        -- 2. BACKGROUND BOSS MONITOR
+        -- 3. BACKGROUND BOSS MONITOR
         -- ==========================================
         while task.wait(1) do
             local liveFolder = workspace:FindFirstChild("Live")
@@ -1675,7 +1669,7 @@ if game.PlaceId == 74747090658891 then
                     
                     task.wait(2) -- Buffer for death animations
                     
-                    -- Send Webhook before restarting (Ensure your sendRaidWebhook function is above this in your main script)
+                    -- Send Webhook before restarting
                     if sendRaidWebhook then sendRaidWebhook() end
                     
                     task.wait(0.5)
