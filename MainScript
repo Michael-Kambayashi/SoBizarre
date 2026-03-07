@@ -68,6 +68,7 @@ local SKIN_BLACKLIST = {
     "Greyscale (Crazy Diamond)",
 	"Reverso (Crazy Diamond)",
     "Greyscale (The Hand)",
+	"Purple (The Hand)"
     "Greyscale (Red Hot Chili Pepper)",
 	"Greyscale (Gold Experience)",
 	"Green (Gold Experience)",
