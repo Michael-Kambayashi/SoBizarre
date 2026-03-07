@@ -7,6 +7,7 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
+local StarterGui = game:GetService("StarterGui")
 
 -- ==========================================
 -- STATE VARIABLES (DEFAULTS)
@@ -1582,6 +1583,17 @@ if game.PlaceId == 74747090658891 then
         local raidShopRemote = ReplicatedStorage.requests.character:FindFirstChild("raid_shop")
 		local notifRemote = ReplicatedStorage.requests.general:FindFirstChild("notification")
 		
+		-- Helper function to send notifications
+		local function SendNotif(title, text)
+		    pcall(function()
+		        StarterGui:SetCore("SendNotification", {
+		            Title = title,
+		            Text = text,
+		            Duration = 3
+		        })
+		    end)
+		end
+		
 		if raidShopRemote and notifRemote then
 		    local shopConnection
 		    
@@ -1600,7 +1612,7 @@ if game.PlaceId == 74747090658891 then
 		            local bossShop = data.RaidShop[targetBoss]
 		            
 		            if bossShop then
-		                print("[Auto-Buy] Found " .. targetBoss .. " shop.")
+		                SendNotif("🛍️ Shop Found", "Checking Kira's inventory...")
 		                
 		                -- Variable to track if we ran out of money
 		                local isBroke = false
@@ -1608,50 +1620,49 @@ if game.PlaceId == 74747090658891 then
 		                -- Temporary connection to listen for the "Broke" message
 		                local notifConnection
 		                notifConnection = notifRemote.OnClientEvent:Connect(function(msg, time)
-		                    -- Check for the specific broke message (using string.find to be safe with emojis)
+		                    -- Check for the specific broke message
 		                    if tostring(msg):find("You're too broke") then
 		                        isBroke = true
-		                        print("[Auto-Buy] Detected 'Broke' notification. Stopping purchases.")
+		                        SendNotif("💸 Broke Alert", "Insufficient funds detected.")
 		                    end
 		                end)
 		
 		                -- 1. BUY LUCKY ARROW (PRIORITY)
 		                local arrowData = bossShop[priorityItem]
 		                if arrowData and arrowData.Stock and arrowData.Stock > 0 then
-		                    print("[Auto-Buy] Attempting to purchase " .. priorityItem)
+		                    SendNotif("⏳ Purchasing", "Attempting to buy Lucky Arrow...")
 		                    
 		                    pcall(function()
 		                        raidShopRemote:FireServer(priorityItem, targetBoss)
 		                    end)
 		                    
-		                    -- CRITICAL WAIT: We must wait for the server to tell us if we are broke
-		                    -- before trying to buy the chest.
+		                    -- CRITICAL WAIT: Wait for server response/notification
 		                    task.wait(1.5) 
 		                else
-		                    print("[Auto-Buy] " .. priorityItem .. " out of stock or not found.")
+		                    SendNotif("❌ Stock Error", "Lucky Arrow not in stock.")
 		                end
 		
 		                -- 2. BUY LEGENDARY CHEST (IF NOT BROKE)
 		                if not isBroke then
 		                    local chestData = bossShop[secondaryItem]
 		                    if chestData and chestData.Stock and chestData.Stock > 0 then
-		                        print("[Auto-Buy] Funds valid. Purchasing " .. secondaryItem)
+		                        SendNotif("💰 Purchasing", "Funds valid. Buying Legendary Chest...")
 		                        
-		                        -- Buy the chest (Loop if stock > 1, currently set to buy 1)
 		                        pcall(function()
 		                            raidShopRemote:FireServer(secondaryItem, targetBoss)
 		                        end)
 		                    else
-		                        print("[Auto-Buy] " .. secondaryItem .. " out of stock.")
+		                        SendNotif("❌ Stock Error", "Legendary Chest not in stock.")
 		                    end
 		                else
-		                    print("[Auto-Buy] Skipped " .. secondaryItem .. " because insufficient funds.")
+		                    SendNotif("⚠️ Skipped", "Skipped Chest due to low funds.")
 		                end
 		
 		                -- Cleanup notification listener
 		                if notifConnection then notifConnection:Disconnect() end
 		            else
-		                print("[Auto-Buy] " .. targetBoss .. " data not found in this raid.")
+		                -- Optional: Notify if boss isn't present
+		                -- SendNotif("⚠️ Info", "Kira not found in this shop.")
 		            end
 		        end
 		    end)
