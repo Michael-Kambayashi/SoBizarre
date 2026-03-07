@@ -1585,8 +1585,8 @@ if game.PlaceId == 74747090658891 then
         if raidShopRemote and notifRemote then
             local shopConnection
             local notifConnection
-            local hasAttemptedPurchase = false -- DEBOUNCE: Prevents infinite spam
             local isBroke = false 
+            local hasAttemptedPurchase = false -- Prevents spamming
 
             notifConnection = notifRemote.OnClientEvent:Connect(function(msg, time)
                 if msg and string.find(msg, "You're too broke") then
@@ -1595,58 +1595,38 @@ if game.PlaceId == 74747090658891 then
             end)
 
             shopConnection = raidShopRemote.OnClientEvent:Connect(function(data)
-                -- If we already tried to buy items this raid, or script is dead, exit
-                if hasAttemptedPurchase or not isScriptActive() then 
-                    return 
-                end
+                if hasAttemptedPurchase or not isScriptActive() then return end
 
                 if data and type(data) == "table" and data.Type == "UpdateRaidShop" and data.RaidShop then
-                    hasAttemptedPurchase = true -- Lock: Only run this logic once per raid
+                    -- We only want to buy from this specific boss
+                    local targetBoss = "Yoshikage Kira Bites the Dust"
+                    local shopData = data.RaidShop[targetBoss]
                     
-                    for bossName, bossShopData in pairs(data.RaidShop) do
-                        if type(bossShopData) == "table" then
-                            local arrowData = bossShopData["Lucky Arrow"]
-                            local chestData = bossShopData["Legendary Chest"]
-                            
-                            isBroke = false 
+                    if shopData then
+                        hasAttemptedPurchase = true -- Mark as done for this raid
+                        isBroke = false 
 
-                            if arrowData and arrowData.Stock and arrowData.Stock > 0 then
-                                print("[Auto-Buy] Attempting Lucky Arrow...")
-                                pcall(function() raidShopRemote:FireServer("Lucky Arrow", bossName) end)
+                        -- 1. Try Lucky Arrow
+                        local arrowData = shopData["Lucky Arrow"]
+                        if arrowData and arrowData.Stock and arrowData.Stock > 0 then
+                            raidShopRemote:FireServer("Lucky Arrow", targetBoss)
+                            task.wait(1.2) -- Wait to see if we get the "Broke" notification
+                            
+                            if not isBroke then
+                                pcall(function() StarterGui:SetCore("SendNotification", {Title = "✅ Bought", Text = "Lucky Arrow acquired.", Duration = 3}) end)
                                 
-                                task.wait(1.5) -- Wait for response
-                                
-                                if isBroke then
-                                    pcall(function()
-                                        StarterGui:SetCore("SendNotification", {
-                                            Title = "💰 Purchase Failed",
-                                            Text = "Insufficient funds. Stopping buys.",
-                                            Duration = 5
-                                        })
-                                    end)
-                                else
-                                    pcall(function()
-                                        StarterGui:SetCore("SendNotification", {
-                                            Title = "✅ Success",
-                                            Text = "Lucky Arrow bought!",
-                                            Duration = 5
-                                        })
-                                    end)
-                                    
-                                    if chestData and chestData.Stock and chestData.Stock > 0 then
-                                        task.wait(0.5)
-                                        pcall(function() raidShopRemote:FireServer("Legendary Chest", bossName) end)
-                                    end
+                                -- 2. Try Legendary Chest ONLY if Arrow bought successfully
+                                local chestData = shopData["Legendary Chest"]
+                                if chestData and chestData.Stock and chestData.Stock > 0 then
+                                    task.wait(0.5)
+                                    raidShopRemote:FireServer("Legendary Chest", targetBoss)
+                                    pcall(function() StarterGui:SetCore("SendNotification", {Title = "✅ Bought", Text = "Legendary Chest acquired.", Duration = 3}) end)
                                 end
                             else
-                                pcall(function()
-                                    StarterGui:SetCore("SendNotification", {
-                                        Title = "📦 Out of Stock",
-                                        Text = "Lucky Arrow unavailable.",
-                                        Duration = 5
-                                    })
-                                end)
+                                pcall(function() StarterGui:SetCore("SendNotification", {Title = "❌ Failed", Text = "Insufficient funds for Arrow.", Duration = 3}) end)
                             end
+                        else
+                            pcall(function() StarterGui:SetCore("SendNotification", {Title = "📦 Out of Stock", Text = "Lucky Arrow sold out.", Duration = 3}) end)
                         end
                     end
                 end
