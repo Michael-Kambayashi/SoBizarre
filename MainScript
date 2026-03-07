@@ -1564,6 +1564,7 @@ end
 -- ==========================================
 if game.PlaceId == 74747090658891 then
     
+    -- NEW: DESTROY MAIN MENU GUI ON LOAD
     pcall(function()
         local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui", 10)
         if playerGui then
@@ -1572,14 +1573,62 @@ if game.PlaceId == 74747090658891 then
         end
     end)
 
-    -- Define these outside the spawn so both systems can access them
-    local hasAttemptedPurchase = false 
-
     task.spawn(function()
-        local hasSentWebhook = false 
+	
+		local hasSentWebhook = false 
         
         -- ==========================================
-        -- 1. INITIAL SPAWN EXECUTION
+        -- 1. AUTO-BUY SHOP LISTENER
+        -- ==========================================
+        local raidShopRemote = game:GetService("ReplicatedStorage").requests.character:FindFirstChild("raid_shop")
+        
+        if raidShopRemote then
+            local shopConnection
+            -- Listen for the server sending the shop data to the client
+            shopConnection = raidShopRemote.OnClientEvent:Connect(function(data)
+                
+                if data and type(data) == "table" and data.Type == "UpdateRaidShop" and data.RaidShop then
+                    
+                    -- Define what we want to buy and the maximum amount
+                    local wantedItems = {
+                        ["Lucky Arrow"] = 1,
+                        ["Legendary Chest"] = 1
+                    }
+                    
+                    -- Loop through all bosses in the shop data (Jotaro, DIO, Kira, etc.)
+                    for bossName, bossShopData in pairs(data.RaidShop) do
+                        if type(bossShopData) == "table" then
+                            
+                            -- Check if the boss has the items we want
+                            for itemName, maxAmount in pairs(wantedItems) do
+                                local itemData = bossShopData[itemName]
+                                
+                                -- If the item exists in their shop and has stock
+                                if itemData and itemData.Stock and itemData.Stock > 0 then
+                                    
+                                    -- Calculate how many to buy (limited by stock and our maxAmount)
+                                    local amountToBuy = math.min(itemData.Stock, maxAmount)
+                                    
+                                    for i = 1, amountToBuy do
+                                        task.wait(0.3) -- Small delay to prevent remote spam kicks
+                                        pcall(function()
+                                            raidShopRemote:FireServer(itemName, bossName)
+                                        end)
+                                        print("[Auto-Buy] Purchased " .. itemName .. " (" .. i .. "/" .. amountToBuy .. ") from " .. bossName)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
+                    -- Disconnect listener after processing to prevent spamming remotes
+                    if shopConnection then shopConnection:Disconnect() end
+                end
+            end)
+        end
+
+        -- ==========================================
+        -- 2. INITIAL SPAWN EXECUTION
         -- ==========================================
         task.wait(1.5)
         pcall(function()
@@ -1595,44 +1644,38 @@ if game.PlaceId == 74747090658891 then
         }
 
         -- ==========================================
-        -- 2. BACKGROUND BOSS MONITOR
+        -- 3. BACKGROUND BOSS MONITOR
         -- ==========================================
         while task.wait(1) do
-            if not isScriptActive() then break end
-            
             local liveFolder = workspace:FindFirstChild("Live")
             if liveFolder then
                 local bossMob = nil
+                
+                -- Search the live folder
                 for _, mob in ipairs(liveFolder:GetChildren()) do
-                    if string.sub(mob.Name, 1, 1) == "." and mob.Name ~= player.Name and mob:FindFirstChild("Humanoid") then
-                        local cleanName = mob.Name:sub(2)
-                        for _, bossName in ipairs(RAID_BOSSES) do
-                            if string.find(cleanName, bossName, 1, true) then
-                                bossMob = mob
-                                break
-                            end
+                    for _, bossName in ipairs(RAID_BOSSES) do
+                        if string.find(mob.Name, bossName) then
+                            bossMob = mob
+                            break
                         end
                     end
                     if bossMob then break end
                 end
 
+                -- If the boss spawned, wait for it to be defeated
                 if bossMob then
                     local hum = bossMob:FindFirstChild("Humanoid")
+                    
                     while bossMob.Parent == liveFolder and hum and hum.Health > 0 do
                         task.wait(0.5)
                     end
                     
-                    task.wait(2)
+                    task.wait(2) -- Buffer for death animations
                     
-                    if not hasSentWebhook then
-                        if sendRaidWebhook then sendRaidWebhook() end
-                        hasSentWebhook = true 
-                    end
+                    -- Send Webhook before restarting (Ensure your sendRaidWebhook function is above this in your main script)
+                    if sendRaidWebhook then sendRaidWebhook() end
                     
                     task.wait(0.5)
-                    
-                    -- RESET FOR NEXT RAID
-                    hasAttemptedPurchase = false
                     
                     pcall(function()
                         game:GetService("ReplicatedStorage").requests.character.retryraid:FireServer()
