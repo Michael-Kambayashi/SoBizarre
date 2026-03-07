@@ -1640,7 +1640,7 @@ if game.PlaceId == 74747090658891 then
             "Yoshikage Kira Bites",
             "Jotaro Kujo",
             "Muhammad Avdol",
-            "DIO"
+            ".DIO"
         }
 
         -- ==========================================
