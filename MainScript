@@ -1573,6 +1573,9 @@ if game.PlaceId == 74747090658891 then
         end
     end)
 
+    -- Define these outside the spawn so both systems can access them
+    local hasAttemptedPurchase = false 
+
     task.spawn(function()
         local hasSentWebhook = false 
         
@@ -1583,41 +1586,35 @@ if game.PlaceId == 74747090658891 then
         local notifRemote = game:GetService("ReplicatedStorage").requests.general:FindFirstChild("notification")
         
         if raidShopRemote and notifRemote then
-            local shopConnection
-            local notifConnection
             local isBroke = false 
-            local hasAttemptedPurchase = false -- Prevents spamming
 
-            notifConnection = notifRemote.OnClientEvent:Connect(function(msg, time)
+            notifRemote.OnClientEvent:Connect(function(msg, time)
                 if msg and string.find(msg, "You're too broke") then
                     isBroke = true
                 end
             end)
 
-            shopConnection = raidShopRemote.OnClientEvent:Connect(function(data)
+            raidShopRemote.OnClientEvent:Connect(function(data)
                 if hasAttemptedPurchase or not isScriptActive() then return end
 
                 if data and type(data) == "table" and data.Type == "UpdateRaidShop" and data.RaidShop then
-                    -- We only want to buy from this specific boss
                     local targetBoss = "Yoshikage Kira Bites the Dust"
                     local shopData = data.RaidShop[targetBoss]
                     
                     if shopData then
-                        hasAttemptedPurchase = true -- Mark as done for this raid
+                        hasAttemptedPurchase = true -- Lock purchases for this raid
                         isBroke = false 
 
-                        -- 1. Try Lucky Arrow
                         local arrowData = shopData["Lucky Arrow"]
-                        if arrowData and arrowData.Stock and arrowData.Stock > 0 then
+                        if arrowData and arrowData.Stock > 0 then
                             raidShopRemote:FireServer("Lucky Arrow", targetBoss)
-                            task.wait(1.2) -- Wait to see if we get the "Broke" notification
+                            task.wait(1.2) 
                             
                             if not isBroke then
                                 pcall(function() StarterGui:SetCore("SendNotification", {Title = "✅ Bought", Text = "Lucky Arrow acquired.", Duration = 3}) end)
                                 
-                                -- 2. Try Legendary Chest ONLY if Arrow bought successfully
                                 local chestData = shopData["Legendary Chest"]
-                                if chestData and chestData.Stock and chestData.Stock > 0 then
+                                if chestData and chestData.Stock > 0 then
                                     task.wait(0.5)
                                     raidShopRemote:FireServer("Legendary Chest", targetBoss)
                                     pcall(function() StarterGui:SetCore("SendNotification", {Title = "✅ Bought", Text = "Legendary Chest acquired.", Duration = 3}) end)
@@ -1653,35 +1650,41 @@ if game.PlaceId == 74747090658891 then
         -- 3. BACKGROUND BOSS MONITOR
         -- ==========================================
         while task.wait(1) do
+            if not isScriptActive() then break end
+            
             local liveFolder = workspace:FindFirstChild("Live")
             if liveFolder then
                 local bossMob = nil
-                
-                -- Search the live folder
                 for _, mob in ipairs(liveFolder:GetChildren()) do
-                    for _, bossName in ipairs(RAID_BOSSES) do
-                        if string.find(mob.Name, bossName) then
-                            bossMob = mob
-                            break
+                    if string.sub(mob.Name, 1, 1) == "." and mob.Name ~= player.Name and mob:FindFirstChild("Humanoid") then
+                        local cleanName = mob.Name:sub(2)
+                        for _, bossName in ipairs(RAID_BOSSES) do
+                            if string.find(cleanName, bossName, 1, true) then
+                                bossMob = mob
+                                break
+                            end
                         end
                     end
                     if bossMob then break end
                 end
 
-                -- If the boss spawned, wait for it to be defeated
                 if bossMob then
                     local hum = bossMob:FindFirstChild("Humanoid")
-                    
                     while bossMob.Parent == liveFolder and hum and hum.Health > 0 do
                         task.wait(0.5)
                     end
                     
-                    task.wait(2) -- Buffer for death animations
+                    task.wait(2)
                     
-                    -- Send Webhook before restarting (Ensure your sendRaidWebhook function is above this in your main script)
-                    if sendRaidWebhook then sendRaidWebhook() end
+                    if not hasSentWebhook then
+                        if sendRaidWebhook then sendRaidWebhook() end
+                        hasSentWebhook = true 
+                    end
                     
                     task.wait(0.5)
+                    
+                    -- RESET FOR NEXT RAID
+                    hasAttemptedPurchase = false
                     
                     pcall(function()
                         game:GetService("ReplicatedStorage").requests.character.retryraid:FireServer()
