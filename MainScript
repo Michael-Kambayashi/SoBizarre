@@ -1578,80 +1578,7 @@ if game.PlaceId == 74747090658891 then
 		local hasSentWebhook = false 
         
         -- ==========================================
-        -- 1. AUTO-BUY SHOP LISTENER
-        -- ==========================================
-        local raidShopRemote = ReplicatedStorage.requests.character:FindFirstChild("raid_shop")
-		local notifRemote = ReplicatedStorage.requests.general:FindFirstChild("notification")
-		
-		-- Helper Function for Notifications
-		local function SendNotif(title, text)
-		    pcall(function()
-		        StarterGui:SetCore("SendNotification", {
-		            Title = title,
-		            Text = text,
-		            Duration = 5
-		        })
-		    end)
-		end
-		
-		if raidShopRemote and notifRemote then
-		    local shopConnection
-		    
-		    shopConnection = raidShopRemote.OnClientEvent:Connect(function(data)
-		        -- Ensure data is valid
-		        if data and type(data) == "table" and data.Type == "UpdateRaidShop" and data.RaidShop then
-		            
-		            -- 1. Disconnect immediately so this only runs ONCE per raid
-		            if shopConnection then shopConnection:Disconnect() end
-		
-		            -- 2. Define our single target boss (NO LOOPS)
-		            local targetBoss = "Yoshikage Kira Bites the Dust"
-		            local bossShop = data.RaidShop[targetBoss]
-		            
-		            -- Only proceed if Kira is actually in the shop data
-		            if bossShop then
-		                SendNotif("🛍️ Shop Detected", "Found Kira! Checking wallet...")
-		
-		                -- Flag to track if we go broke
-		                local isBroke = false
-		                
-		                -- 3. Listen for "You're too broke" notification temporarily
-		                local notifConnection
-		                notifConnection = notifRemote.OnClientEvent:Connect(function(msg)
-		                    if tostring(msg):find("You're too broke") then
-		                        isBroke = true
-		                        SendNotif("💸 Transaction Failed", "You are too broke to continue buying.")
-		                    end
-		                end)
-		
-		                -- 4. BUY LUCKY ARROW (Priority)
-		                if bossShop["Lucky Arrow"] and bossShop["Lucky Arrow"].Stock > 0 then
-		                    raidShopRemote:FireServer("Lucky Arrow", targetBoss)
-		                    -- Wait 1.5s to see if the server says we are broke
-		                    task.wait(1.5)
-		                else
-		                    SendNotif("⚠️ Stock Info", "Lucky Arrow not available.")
-		                end
-		
-		                -- 5. BUY LEGENDARY CHEST (Only if not broke)
-		                if isBroke then
-		                    -- Do nothing, we are broke
-		                else
-		                    if bossShop["Legendary Chest"] and bossShop["Legendary Chest"].Stock > 0 then
-		                        raidShopRemote:FireServer("Legendary Chest", targetBoss)
-		                        SendNotif("✅ Success", "Attempted to buy Legendary Chest.")
-		                    end
-		                end
-		
-		                -- Cleanup the broke listener
-		                if notifConnection then notifConnection:Disconnect() end
-		            end
-		        end
-		    end)
-		end
-
-        -- ==========================================
-        -- 2. INITIAL SPAWN EXECUTION
+        -- 1. INITIAL SPAWN EXECUTION
         -- ==========================================
         task.wait(1.5)
         pcall(function()
@@ -1667,7 +1594,7 @@ if game.PlaceId == 74747090658891 then
         }
 
         -- ==========================================
-        -- 3. BACKGROUND BOSS MONITOR
+        -- 2. BACKGROUND BOSS MONITOR
         -- ==========================================
         while task.wait(1) do
             local liveFolder = workspace:FindFirstChild("Live")
