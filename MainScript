@@ -1564,6 +1564,8 @@ end
 -- GAMEMODE SPECIFIC LOGIC (RAID AUTO-RESTART & AUTO-BUY)
 -- ==========================================
 if game.PlaceId == 74747090658891 then
+
+	local autoBuyEnabled = false
     
     -- 1. DESTROY MAIN MENU GUI ON LOAD
     pcall(function()
@@ -1577,6 +1579,8 @@ if game.PlaceId == 74747090658891 then
     task.spawn(function()
         local ReplicatedStorage = game:GetService("ReplicatedStorage")
         local StarterGui = game:GetService("StarterGui")
+		local Players = game:GetService("Players")
+		local LocalPlayer = Players.LocalPlayer
         local raidShopRemote = ReplicatedStorage.requests.character:FindFirstChild("raid_shop")
         local notifRemote = ReplicatedStorage.requests.general:FindFirstChild("notification")
 
@@ -1592,33 +1596,46 @@ if game.PlaceId == 74747090658891 then
         -- ==========================================
         -- 1. AUTO-BUY LOGIC (DIRECT FIRE)
         -- ==========================================
-        if raidShopRemote and notifRemote then
-            -- Wait a moment for things to load
-            task.wait(1)
+        if autoBuyEnabled and raidShopRemote and notifRemote then
+            task.wait(2) -- Wait for UI to stabilize
 
             local isBroke = false
+            local hasObtained = false
             local brokeListener
             
-            -- Listen for "You're too broke"
+            -- A. Listen for "Too Broke"
             brokeListener = notifRemote.OnClientEvent:Connect(function(msg)
                 if tostring(msg):find("You're too broke") then
                     isBroke = true
                 end
             end)
 
-            -- A. Attempt to buy Lucky Arrow
+            -- B. Purchase Lucky Arrow
             SendRaidNotif("🛒 Auto-Buy", "Buying Lucky Arrow...")
             raidShopRemote:FireServer("Lucky Arrow", "Yoshikage Kira Bites the Dust")
 
-            -- B. Critical Wait (Check for broke message)
-            task.wait(1.5)
+            -- C. Wait for response and check for "Obtained" frame
+            -- We check the UI for the "Obtained" frame
+            task.wait(2.0)
+            
+            local holder = LocalPlayer.PlayerGui:FindFirstChild("Notifications") and LocalPlayer.PlayerGui.Notifications:FindFirstChild("holder")
+            if holder then
+                for _, child in ipairs(holder:GetChildren()) do
+                    if child:IsA("Frame") and string.find(child.Name, "Lucky Arrow") then
+                        hasObtained = true
+                        break
+                    end
+                end
+            end
 
-            -- C. Logic Check
+            -- D. Logic Check
             if isBroke then
                 SendRaidNotif("💸 Broke Alert", "Skipped Chest (Insufficient Funds).")
-            else
+            elseif hasObtained then
                 SendRaidNotif("💰 Purchasing", "Buying Legendary Chest...")
                 raidShopRemote:FireServer("Legendary Chest", "Yoshikage Kira Bites the Dust")
+            else
+                SendRaidNotif("⚠️ Warning", "Lucky Arrow not confirmed. Skipping Chest.")
             end
 
             if brokeListener then brokeListener:Disconnect() end
