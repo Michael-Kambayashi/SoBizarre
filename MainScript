@@ -1597,7 +1597,7 @@ if game.PlaceId == 74747090658891 then
         -- 1. AUTO-BUY LOGIC (DIRECT FIRE)
         -- ==========================================
         if autoBuyEnabled and raidShopRemote and notifRemote then
-            task.wait(2) -- Wait for UI to stabilize
+            task.wait(15) -- Wait for UI to stabilize
 
             local isBroke = false
             local hasObtained = false
@@ -1616,7 +1616,7 @@ if game.PlaceId == 74747090658891 then
 
             -- C. Wait for response and check for "Obtained" frame
             -- We check the UI for the "Obtained" frame
-            task.wait(2.0)
+            task.wait(3.0)
             
             local holder = LocalPlayer.PlayerGui:FindFirstChild("Notifications") and LocalPlayer.PlayerGui.Notifications:FindFirstChild("holder")
             if holder then
