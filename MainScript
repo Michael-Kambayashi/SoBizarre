@@ -1565,7 +1565,7 @@ end
 -- ==========================================
 if game.PlaceId == 74747090658891 then
 
-	local autoBuyEnabled = true
+	local autoBuyEnabled = false
     
     -- 1. DESTROY MAIN MENU GUI ON LOAD
     pcall(function()
