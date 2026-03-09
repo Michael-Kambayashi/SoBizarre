@@ -1615,9 +1615,10 @@ if game.PlaceId == 74747090658891 then
 
             -- C. Logic Check
             if isBroke then
-                SendRaidNotif("💸 Broke Alert", "Not enough coins for Lucky Arrow.")
+                SendRaidNotif("💸 Broke Alert", "Skipped Chest (Insufficient Funds).")
             else
-                SendRaidNotif("💰 Success", "Lucky Arrow purchased successfully.")
+                SendRaidNotif("💰 Purchasing", "Buying Legendary Chest...")
+                raidShopRemote:FireServer("Legendary Chest", "Yoshikage Kira Bites the Dust")
             end
 
             if brokeListener then brokeListener:Disconnect() end
