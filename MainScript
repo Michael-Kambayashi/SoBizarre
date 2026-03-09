@@ -1614,7 +1614,7 @@ if game.PlaceId == 74747090658891 then
         -- 2. AUTO-BUY LOGIC
         -- ==========================================
         if autoBuyEnabled and raidShopRemote and notifRemote then
-            task.wait(3) -- Wait for UI to stabilize
+            task.wait(10) -- Wait for UI to stabilize
 
             local isBroke = false
             local hasObtained = false
