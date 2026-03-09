@@ -1592,12 +1592,29 @@ if game.PlaceId == 74747090658891 then
                 })
             end)
         end
+
+		-- ==========================================
+        -- 1. INITIAL SPAWN EXECUTION
+        -- ==========================================
+        task.wait(1.5)
+        pcall(function()
+            game:GetService("ReplicatedStorage").requests.character.spawn:FireServer()
+        end)
+
+        -- List of all final bosses you want to trigger the restart
+        local RAID_BOSSES = {
+            "Yoshikage Kira Bites",
+            "Jotaro Kujo",
+            "Muhammad Avdol",
+            "DIO"
+        }
+
         
         -- ==========================================
-        -- 1. AUTO-BUY LOGIC (DIRECT FIRE)
+        -- 2. AUTO-BUY LOGIC
         -- ==========================================
         if autoBuyEnabled and raidShopRemote and notifRemote then
-            task.wait(25) -- Wait for UI to stabilize
+            task.wait(3) -- Wait for UI to stabilize
 
             local isBroke = false
             local hasObtained = false
@@ -1616,7 +1633,7 @@ if game.PlaceId == 74747090658891 then
 
             -- C. Wait for response and check for "Obtained" frame
             -- We check the UI for the "Obtained" frame
-            task.wait(4.0)
+            task.wait(3.5)
             
             local holder = LocalPlayer.PlayerGui:FindFirstChild("Notifications") and LocalPlayer.PlayerGui.Notifications:FindFirstChild("holder")
             if holder then
@@ -1640,23 +1657,7 @@ if game.PlaceId == 74747090658891 then
 
             if brokeListener then brokeListener:Disconnect() end
         end
-        
-        -- ==========================================
-        -- 2. INITIAL SPAWN EXECUTION
-        -- ==========================================
-        task.wait(1.5)
-        pcall(function()
-            game:GetService("ReplicatedStorage").requests.character.spawn:FireServer()
-        end)
-
-        -- List of all final bosses you want to trigger the restart
-        local RAID_BOSSES = {
-            "Yoshikage Kira Bites",
-            "Jotaro Kujo",
-            "Muhammad Avdol",
-            "DIO"
-        }
-
+    
         -- ==========================================
         -- 3. BACKGROUND BOSS MONITOR
         -- ==========================================
