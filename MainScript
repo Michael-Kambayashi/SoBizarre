@@ -53,7 +53,7 @@ local STAND_RARITIES = {
 }
 
 local TRAIT_CATEGORIES = {
-    ["Mythical"] = {"Elegant", "Feral", "Transcendent"},
+    ["Mythical"] = {"Elegant", "Feral", "Demonic", "Transcendent"},
     ["Legendary"] = {"Methodical", "Dominant", "Cursed", "Rhythmic", "Artistic", "Suffocating"},
     ["Rare"] = {"Determined", "Compassionate", "Furious", "Slugger", "Fearful", "Durable"},
     ["Uncommon"] = {"Curious", "Astute", "Predictive", "Kind"},
